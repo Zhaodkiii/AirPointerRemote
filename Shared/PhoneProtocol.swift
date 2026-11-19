@@ -24,7 +24,7 @@ enum PhoneProtocol {
 
     enum Action: UInt8 {
         case heartbeat, move, leftDown, leftUp, rightClick, doubleClick
-        case scroll, stop, center, pause, resume, confirm, disconnect
+        case scroll, stop, center, pause, resume, confirm, disconnect, linkStart, linkEnd
     }
 
     struct Command {

@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var controller: RemoteController
     @ObservedObject var connection: PhoneConnection
+    @State private var linkedScreen = false
     @State private var settings = false
     @State private var showHelp = false
     @State private var confirmNewIdentity = false
@@ -22,10 +23,17 @@ struct ContentView: View {
                     Button { showHelp = true } label: { Image(systemName: "questionmark.circle") }
                         .accessibilityLabel("How to Use")
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { controller.suspendInteraction(true); linkedScreen = true } label: {
+                        Image(systemName: "rectangle.connected.to.line.below")
+                    }
+                    .accessibilityLabel("Linked Screen")
                     Button { controller.stop(); settings = true } label: { Image(systemName: "slider.horizontal.3") }
                         .accessibilityLabel("Settings")
                 }
+            }
+            .fullScreenCover(isPresented: $linkedScreen, onDismiss: { controller.suspendInteraction(settings || showHelp) }) {
+                LinkedScreenView(connection: connection)
             }
             .onChange(of: settings) { _, _ in controller.suspendInteraction(settings || showHelp) }
             .onChange(of: showHelp) { _, _ in controller.suspendInteraction(settings || showHelp) }
@@ -197,7 +205,7 @@ struct ContentView: View {
                     Text("Recenter moves the pointer to the center of its display. Precision slows movement. Continuous keeps motion control active after you release Move.")
                 }
                 Section("Privacy") {
-                    Text("Pointer and motion input are sent directly over Bluetooth to the Mac you pair with. AirPointer Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu.")
+                    Text("Pointer and motion input use Bluetooth. Linked Screen uses an encrypted local network connection to the paired Mac for video, pointer input and text. AirPointer Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu.")
                 }
                 Section("Stopping Control and Permissions") {
                     Text("Leaving the app or locking iPhone stops control. Use the Mac menu bar to pause, revoke pairings, or quit. The emergency shortcut is Control + Option + Command + Period.")

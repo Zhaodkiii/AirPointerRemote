@@ -25,6 +25,12 @@ final class PhoneReceiver {
 
     private let identity = try? PhoneKeychain.identity()
     private let mouse = PhoneMouse()
+    private var linked: LinkedHost?
+    private func endSharing() {
+        guard let host = linked else { return }
+        linked = nil
+        DispatchQueue.main.async { host.stop() }
+    }
     private var sessions: [UUID: Session] = [:]
     private var notifications: [(Data, CBCentral)] = []
     private var manager: CBPeripheralManager?
@@ -60,7 +66,7 @@ final class PhoneReceiver {
     }
 
     func unsubscribe(_ central: CBCentral) {
-        if activeID == central.identifier { mouse.reset(); activeID = nil; onEndControl?(); onState?("iPhone disconnected") }
+        if activeID == central.identifier { endSharing(); mouse.reset(); activeID = nil; onEndControl?(); onState?("iPhone disconnected") }
         if pendingID == central.identifier {
             pendingID = nil
             if let session = sessions[central.identifier] { dismissPairingAlert(token: session.promptToken) }
@@ -140,12 +146,34 @@ final class PhoneReceiver {
         }
         guard session.authorized, activeID == central.identifier else { return }
         if command.action == .disconnect {
-            mouse.reset(); activeID = nil
+            endSharing(); mouse.reset(); activeID = nil
             onEndControl?()
             session.authorized = false
             status(session, state: "disconnected")
             return
         }
+        if command.action == .linkEnd { endSharing(); return }
+        if command.action == .linkStart {
+            guard !paused, let first = UInt32(exactly: command.x), let second = UInt32(exactly: command.y) else { return }
+            endSharing()
+            mouse.reset()
+            let host = LinkedHost()
+            linked = host
+            let offer = LinkedOffer(key: key, first: first, second: second)
+            let state = onState
+            DispatchQueue.main.async { [weak self, host] in
+                host.onEnd = { [weak self, weak host] in
+                    queue.async {
+                        if let self, self.linked === host { self.linked = nil }
+                    }
+                }
+                host.report = state
+                host.start(offer)
+            }
+            return
+        }
+        if command.action == .pause || command.action == .stop { endSharing() }
+        if linked != nil, ![.pause, .resume, .heartbeat, .stop].contains(command.action) { return }
         if command.action == .move { movementCount += 1 }
         if command.action == .pause { remotelyPaused = true; mouse.reset() }
         if command.action == .resume { remotelyPaused = false }
@@ -166,6 +194,7 @@ final class PhoneReceiver {
             old.authorized = false
             status(old, state: "replaced")
         }
+        endSharing()
         manager?.setDesiredConnectionLatency(.low, for: session.central)
         onTakeControl?()
         activeID = session.central.identifier
@@ -202,6 +231,7 @@ final class PhoneReceiver {
             if now - session.lastSeen > 0.3 { mouse.reset() }
             if now - session.lastSeen > 3 {
                 session.authorized = false
+                endSharing()
                 self.activeID = nil
                 onEndControl?()
                 status(session, state: "timeout")
@@ -220,6 +250,7 @@ final class PhoneReceiver {
     }
 
     func setPaused(_ value: Bool) {
+        if value { endSharing() }
         locallyPaused = value
         mouse.reset()
         if let activeID, let session = sessions[activeID] { status(session) }
@@ -240,6 +271,7 @@ final class PhoneReceiver {
     }
 
     func reset() {
+        endSharing()
         if let pendingID, let session = sessions[pendingID] { dismissPairingAlert(token: session.promptToken) }
         mouse.reset()
         if activeID != nil { onEndControl?() }

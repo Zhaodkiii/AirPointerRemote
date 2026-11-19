@@ -45,7 +45,14 @@ final class RemoteController: ObservableObject {
     var airActive: Bool { canControl && mode != .trackpad && (airHeld || continuous) }
 
     func setForeground(_ active: Bool, inBackground: Bool) {
-        stop()
+        // The system Local Network prompt temporarily makes the app inactive.
+        // Keep the pairing alive until the user responds or the app actually backgrounds.
+        if !active, !inBackground, connection.linkedRequested {
+            foreground = false
+            updateMotion()
+            return
+        }
+        if !active || !connection.linkedRequested { stop() }
         foreground = active
         if active || inBackground || !connection.connecting {
             connection.setForeground(active)

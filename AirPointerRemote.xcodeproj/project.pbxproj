@@ -1,62 +1,75 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
+	classes = {
+	};
 	objectVersion = 77;
 	objects = {
+
 /* Begin PBXBuildFile section */
-		C30000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019; };
-		B20000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019; };
-		A10000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019; };
-		C30000000000000000000012 /* PhoneProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000011; };
-		B20000000000000000000012 /* PhoneProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000011; };
-		C30000000000000000000014 /* Watch app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019 /* LICENSE */; };
+		B20000000000000000000012 /* Shared/PhoneProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000011 /* Shared/PhoneProtocol.swift */; };
+		B20000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019 /* LICENSE */; };
+		B20000000000000000000032 /* Shared/LinkedTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000031 /* Shared/LinkedTransport.swift */; };
+		C30000000000000000000012 /* Shared/PhoneProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000011 /* Shared/PhoneProtocol.swift */; };
+		C30000000000000000000014 /* AirPointerRemoteWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* AirPointerRemoteWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C30000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019 /* LICENSE */; };
+		C30000000000000000000032 /* Shared/LinkedTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000031 /* Shared/LinkedTransport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		C30000000000000000000017 = {isa = PBXContainerItemProxy; containerPortal = C30000000000000000000009; proxyType = 1; remoteGlobalIDString = A10000000000000000000006; remoteInfo = "AirPointer Remote Watch"; };
+		C30000000000000000000017 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C30000000000000000000009 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000006;
+			remoteInfo = "AirPointer Remote Watch";
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		C30000000000000000000015 /* Embed Watch Content */ = {
-            isa = PBXCopyFilesBuildPhase;
-            buildActionMask = 2147483647;
-            dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
-            dstSubfolderSpec = 16;
-            files = (C30000000000000000000014, );
-            name = "Embed Watch Content";
-            runOnlyForDeploymentPostprocessing = 0;
-        };
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				C30000000000000000000014 /* AirPointerRemoteWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-        C30000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/PhoneProtocol.swift; sourceTree = SOURCE_ROOT; };
-		C30000000000000000000001 /* AirPointerRemote.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemote.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B20000000000000000000001 /* AirPointerRemoteMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemoteMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000001 /* AirPointerRemoteWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemoteWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000001 /* AirPointerRemoteMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemoteMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C30000000000000000000001 /* AirPointerRemote.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemote.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C30000000000000000000011 /* Shared/PhoneProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/PhoneProtocol.swift; sourceTree = SOURCE_ROOT; };
 		C30000000000000000000019 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = SOURCE_ROOT; };
+		C30000000000000000000031 /* Shared/LinkedTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/LinkedTransport.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		C30000000000000000000002 /* AirPointer Remote iPhone */ = {
+		A10000000000000000000002 /* Watch */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = iPhone;
+			path = Watch;
 			sourceTree = "<group>";
 		};
-		B20000000000000000000002 /* AirPointer Remote Mac */ = {
+		B20000000000000000000002 /* Mac */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Mac;
 			sourceTree = "<group>";
 		};
-		A10000000000000000000002 /* AirPointer Remote Watch */ = {
+		C30000000000000000000002 /* iPhone */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Watch;
+			path = iPhone;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		C30000000000000000000003 /* Frameworks */ = {
+		A10000000000000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -70,7 +83,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A10000000000000000000003 /* Frameworks */ = {
+		C30000000000000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -81,39 +94,49 @@
 
 /* Begin PBXGroup section */
 		C30000000000000000000004 = {
-            isa = PBXGroup;
-            children = (C30000000000000000000002, B20000000000000000000002, A10000000000000000000002, C30000000000000000000011, C30000000000000000000019, C30000000000000000000005,);
-            sourceTree = "<group>";
-        };
-        C30000000000000000000005 /* Products */ = {
-            isa = PBXGroup;
-            children = (C30000000000000000000001, B20000000000000000000001, A10000000000000000000001,);
-            name = Products;
-            sourceTree = "<group>";
-        };
+			isa = PBXGroup;
+			children = (
+				C30000000000000000000002 /* iPhone */,
+				B20000000000000000000002 /* Mac */,
+				A10000000000000000000002 /* Watch */,
+				C30000000000000000000011 /* Shared/PhoneProtocol.swift */,
+				C30000000000000000000031 /* Shared/LinkedTransport.swift */,
+				C30000000000000000000019 /* LICENSE */,
+				C30000000000000000000005 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C30000000000000000000005 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C30000000000000000000001 /* AirPointerRemote.app */,
+				B20000000000000000000001 /* AirPointerRemoteMac.app */,
+				A10000000000000000000001 /* AirPointerRemoteWatch.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		C30000000000000000000006 /* AirPointer Remote iPhone */ = {
+		A10000000000000000000006 /* AirPointer Remote Watch */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = C3000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote iPhone" */;
+			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Watch" */;
 			buildPhases = (
-				C30000000000000000000007 /* Sources */,
-				C30000000000000000000003 /* Frameworks */,
-				C30000000000000000000008 /* Resources */,
-				C30000000000000000000015 /* Embed Watch Content */,
+				A10000000000000000000007 /* Sources */,
+				A10000000000000000000003 /* Frameworks */,
+				A10000000000000000000008 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				C30000000000000000000016 /* Watch target dependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				C30000000000000000000002 /* AirPointer Remote iPhone */,
+				A10000000000000000000002 /* Watch */,
 			);
-			name = "AirPointer Remote iPhone";
-			productName = AirPointerRemote;
-			productReference = C30000000000000000000001 /* AirPointerRemote.app */;
+			name = "AirPointer Remote Watch";
+			productName = AirPointerRemoteWatch;
+			productReference = A10000000000000000000001 /* AirPointerRemoteWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
 		B20000000000000000000006 /* AirPointer Remote Mac */ = {
@@ -129,31 +152,33 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				B20000000000000000000002 /* AirPointer Remote Mac */,
+				B20000000000000000000002 /* Mac */,
 			);
 			name = "AirPointer Remote Mac";
 			productName = AirPointerRemoteMac;
 			productReference = B20000000000000000000001 /* AirPointerRemoteMac.app */;
 			productType = "com.apple.product-type.application";
 		};
-		A10000000000000000000006 /* AirPointer Remote Watch */ = {
+		C30000000000000000000006 /* AirPointer Remote iPhone */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Watch" */;
+			buildConfigurationList = C3000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote iPhone" */;
 			buildPhases = (
-				A10000000000000000000007 /* Sources */,
-				A10000000000000000000003 /* Frameworks */,
-				A10000000000000000000008 /* Resources */,
+				C30000000000000000000007 /* Sources */,
+				C30000000000000000000003 /* Frameworks */,
+				C30000000000000000000008 /* Resources */,
+				C30000000000000000000015 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C30000000000000000000016 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				A10000000000000000000002 /* AirPointer Remote Watch */,
+				C30000000000000000000002 /* iPhone */,
 			);
-			name = "AirPointer Remote Watch";
-			productName = AirPointerRemoteWatch;
-			productReference = A10000000000000000000001 /* AirPointerRemoteWatch.app */;
+			name = "AirPointer Remote iPhone";
+			productName = AirPointerRemote;
+			productReference = C30000000000000000000001 /* AirPointerRemote.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -188,11 +213,11 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		C30000000000000000000008 /* Resources */ = {
+		A10000000000000000000008 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C30000000000000000000018 /* LICENSE in Resources */,
+				A10000000000000000000018 /* LICENSE in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -204,33 +229,17 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A10000000000000000000008 /* Resources */ = {
+		C30000000000000000000008 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000018 /* LICENSE in Resources */,
+				C30000000000000000000018 /* LICENSE in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C30000000000000000000007 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-                C30000000000000000000012,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		B20000000000000000000007 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				B20000000000000000000012 /* PhoneProtocol.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		A10000000000000000000007 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -238,115 +247,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B20000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B20000000000000000000012 /* Shared/PhoneProtocol.swift in Sources */,
+				B20000000000000000000032 /* Shared/LinkedTransport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C30000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C30000000000000000000012 /* Shared/PhoneProtocol.swift in Sources */,
+				C30000000000000000000032 /* Shared/LinkedTransport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		C30000000000000000000016 = {isa = PBXTargetDependency; target = A10000000000000000000006; targetProxy = C30000000000000000000017; };
+		C30000000000000000000016 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000006 /* AirPointer Remote Watch */;
+			targetProxy = C30000000000000000000017 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		C3000000000000000000000E /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				SDKROOT = iphoneos;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = 4AN6PV98G7;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connects to your Mac to control its mouse.";
-				INFOPLIST_KEY_NSMotionUsageDescription = "Uses phone rotation to control the Mac pointer.";
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
-				PRODUCT_NAME = AirPointerRemote;
-				TARGETED_DEVICE_FAMILY = 1;
-                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-                INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-                INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-                INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-			};
-			name = Debug;
-		};
-		C3000000000000000000000F /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				SDKROOT = iphoneos;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = 4AN6PV98G7;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connects to your Mac to control its mouse.";
-				INFOPLIST_KEY_NSMotionUsageDescription = "Uses phone rotation to control the Mac pointer.";
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
-				PRODUCT_NAME = AirPointerRemote;
-				TARGETED_DEVICE_FAMILY = 1;
-                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-                INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-                INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-                INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-			};
-			name = Release;
-		};
-		B2000000000000000000000E /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				SDKROOT = macosx;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Umar Afzal and contributors";
-				ENABLE_APP_SANDBOX = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = 4AN6PV98G7;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
-				PRODUCT_NAME = AirPointerRemoteMac;
-			};
-			name = Debug;
-		};
-		B2000000000000000000000F /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				SDKROOT = macosx;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Umar Afzal and contributors";
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = 4AN6PV98G7;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
-				PRODUCT_NAME = AirPointerRemoteMac;
-			};
-			name = Release;
-		};
 		A1000000000000000000000E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				SDKROOT = watchos;
-				WATCHOS_DEPLOYMENT_TARGET = 11.0;
-				SUPPORTED_PLATFORMS = "watchos watchsimulator";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(AIRPOINTER_BUNDLE_ID)";
-				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 3;
@@ -356,22 +288,22 @@
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Sends pointer movement to your Mac.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Uses wrist motion to point at your Mac.";
 				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(AIRPOINTER_BUNDLE_ID)";
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).watchkitapp";
 				PRODUCT_NAME = AirPointerRemoteWatch;
+				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
 			};
 			name = Debug;
 		};
 		A1000000000000000000000F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				SDKROOT = watchos;
-				WATCHOS_DEPLOYMENT_TARGET = 11.0;
-				SUPPORTED_PLATFORMS = "watchos watchsimulator";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(AIRPOINTER_BUNDLE_ID)";
-				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 3;
@@ -381,42 +313,150 @@
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Sends pointer movement to your Mac.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Uses wrist motion to point at your Mac.";
 				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(AIRPOINTER_BUNDLE_ID)";
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).watchkitapp";
 				PRODUCT_NAME = AirPointerRemoteWatch;
+				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Release;
+		};
+		B2000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 4AN6PV98G7;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/MacInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Umar Afzal and contributors";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
+				PRODUCT_NAME = AirPointerRemoteMac;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		B2000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 4AN6PV98G7;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/MacInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Umar Afzal and contributors";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
+				PRODUCT_NAME = AirPointerRemoteMac;
+				SDKROOT = macosx;
 			};
 			name = Release;
 		};
 		C3000000000000000000000C /* Debug */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                AIRPOINTER_BUNDLE_ID = com.daokaihua.airpointerremote;
-                ALWAYS_SEARCH_USER_PATHS = NO;
-                SWIFT_VERSION = 5.0;
-                DEBUG_INFORMATION_FORMAT = dwarf; ONLY_ACTIVE_ARCH = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-            };
-            name = Debug;
-        };
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				AIRPOINTER_BUNDLE_ID = com.daokaihua.airpointerremote;
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
 		C3000000000000000000000D /* Release */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                AIRPOINTER_BUNDLE_ID = com.daokaihua.airpointerremote;
-                ALWAYS_SEARCH_USER_PATHS = NO;
-                SWIFT_VERSION = 5.0;
-                DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_COMPILATION_MODE = wholemodule;
-            };
-            name = Release;
-        };
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				AIRPOINTER_BUNDLE_ID = com.daokaihua.airpointerremote;
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C3000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 4AN6PV98G7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/iPhoneInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connects to your Mac to control its mouse.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Uses phone rotation to control the Mac pointer.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
+				PRODUCT_NAME = AirPointerRemote;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C3000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 4AN6PV98G7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/iPhoneInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connects to your Mac to control its mouse.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Uses phone rotation to control the Mac pointer.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
+				PRODUCT_NAME = AirPointerRemote;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		C3000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote iPhone" */ = {
+		A1000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Watch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				C3000000000000000000000E /* Debug */,
-				C3000000000000000000000F /* Release */,
+				A1000000000000000000000E /* Debug */,
+				A1000000000000000000000F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -430,17 +470,25 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A1000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Watch" */ = {
+		C3000000000000000000000A /* Build configuration list for PBXProject "AirPointerRemote" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A1000000000000000000000E /* Debug */,
-				A1000000000000000000000F /* Release */,
+				C3000000000000000000000C /* Debug */,
+				C3000000000000000000000D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		C3000000000000000000000A = {isa = XCConfigurationList; buildConfigurations = (C3000000000000000000000C, C3000000000000000000000D, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		C3000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote iPhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C3000000000000000000000E /* Debug */,
+				C3000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
-	rootObject = C30000000000000000000009;
+	rootObject = C30000000000000000000009 /* Project object */;
 }

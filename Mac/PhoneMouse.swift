@@ -111,6 +111,14 @@ final class PhoneMouse {
         history.removeAll { now - $0.0 > 0.3 }
     }
 
+    func position(at point: CGPoint) {
+        let now = ProcessInfo.processInfo.systemUptime
+        target = nil
+        lastMoveTime = now
+        pointerPosition = nil
+        movePointer(to: point, at: now)
+    }
+
     private func release(at point: CGPoint) {
         guard held else { return }
         held = false

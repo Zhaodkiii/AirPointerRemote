@@ -123,6 +123,23 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         pendingMoveTime = time
     }
 
+    private(set) var linkedRequested = false
+    func finishLinkedScreen() {
+        linkedRequested = false
+        send(.init(.linkEnd))
+    }
+
+    var connectedMacID: UUID? { connected ? peripheral?.identifier : nil }
+
+    func beginLinkedScreen() -> LinkedOffer? {
+        guard connected, !macPaused, let sessionKey else { return nil }
+        linkedRequested = true
+        let first = UInt32.random(in: .min ... .max)
+        let second = UInt32.random(in: .min ... .max)
+        send(.init(.linkStart, x: Double(first), y: Double(second)))
+        return LinkedOffer(key: sessionKey, first: first, second: second)
+    }
+
     func discardMovement() { pendingMove = .zero }
 
     func send(_ command: PhoneProtocol.Command) { enqueue(command, requiresReady: true) }
@@ -222,6 +239,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     private func clearSession() {
         onDisconnect?()
         connected = false
+        linkedRequested = false
         accessibility = false
         macPaused = false
         connecting = false
@@ -390,6 +408,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
             connecting = false
             pairingCode = nil
             status = update.paused ? "Control is paused. If paused on the Mac, resume from its menu bar." : update.accessibility ? "Connected. You can control the pointer." : "On the Mac, allow AirPointer Remote in System Settings → Privacy & Security → Accessibility."
+        case "timeout": disconnect(reconnect: true, message: "Waiting for the paired Mac to wake…")
         case "confirm": break
         default:
             disconnect(message: update.state == "denied" ? "Pairing was declined on the Mac." : "Control stopped. Select the Mac to reconnect.")
