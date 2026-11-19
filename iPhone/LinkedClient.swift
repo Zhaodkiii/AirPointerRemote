@@ -94,15 +94,15 @@ final class LinkedClient: ObservableObject {
                 // The Mac sends an independent keyframe after its ready message.
                 renderer.flush(removingDisplayedImage: true)
                 decoder = LinkedDecoder()
-        pendingKeyboardClick = nil
+                pendingKeyboardClick = nil
             }
             guard (resuming || renderer.status != .failed), let sample = decoder.sample(from: bytes) else {
                 end("Video playback interrupted. Resume sharing to try again.", keepDraft: true)
                 return
             }
             renderer.enqueue(sample)
-            live = true
-            resuming = false
+            if !live { live = true }
+            if resuming { resuming = false }
             deadline = Date().addingTimeInterval(5)
             channel?.send(.init(.frameAck))
         }
@@ -128,7 +128,8 @@ final class LinkedClient: ObservableObject {
         case .alive:
             guard pausedAt == nil, !resuming else { return }
             deadline = Date().addingTimeInterval(5)
-            canPoint = message.x == 1
+            let allowed = message.x == 1
+            if canPoint != allowed { canPoint = allowed }
         case .focus:
             guard pausedAt == nil, !resuming else { return }
             supportsEditing = message.composerVersion == 1

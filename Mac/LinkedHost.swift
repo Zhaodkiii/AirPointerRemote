@@ -1,5 +1,6 @@
 import AppKit
 import Network
+import OSLog
 import ScreenCaptureKit
 
 /// Main-queue session, owned by one authenticated Bluetooth peer.
@@ -46,7 +47,25 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private var latestSample: CMSampleBuffer?
     private var backgroundDeadline: TimeInterval?
     private var readyMessage: LinkedMessage?
-    private var frameInFlight = false
+    // TCP preserves frame order. Keep the pipeline bounded while retaining
+    // the latest unencoded sample when the receiver falls behind.
+    private struct Frame {
+        let started: TimeInterval
+        let generation: Int
+        var sent: TimeInterval?
+    }
+    private let frameCapacity = 3
+    private var frames: [Frame] = []
+    private var encoding = false
+    private var generation = 0
+    private var readyAfterDrain: LinkedMessage?
+    private let videoLog = Logger(subsystem: "com.daokaihua.airpointerremote", category: "LinkedVideo")
+    private var lastStallLog: TimeInterval = 0
+    private var lastSlowFrameLog: TimeInterval = 0
+    private var pictureDelayed: Bool {
+        guard let oldest = frames.first else { return false }
+        return ProcessInfo.processInfo.systemUptime - oldest.started >= 0.6
+    }
     private var hasPicture = false
     private var pickerActive = false
     private var displayID: CGDirectDisplayID?
@@ -62,7 +81,6 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private var lastFocus: UUID?
     private var insertionResults: [UUID: Bool] = [:]
     private var lastHeartbeat = Date()
-    private var frameSent = Date()
     var onEnd: (() -> Void)?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private(set) var ended = false
@@ -173,7 +191,8 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         guard !ended, readyMessage != nil, backgroundDeadline == nil else { return }
         backgroundDeadline = ProcessInfo.processInfo.systemUptime + PhoneProtocol.LinkedLifecycle.grace
         pending = nil
-        frameBelongsToForeground = false
+        generation += 1
+        readyAfterDrain = nil
         mouse.reset()
         focus.invalidate()
         lastFocus = nil
@@ -191,16 +210,15 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         lastHeartbeat = Date()
         deadline = Date().addingTimeInterval(10)
         pending = latestSample
-        // If a frame was being sent at pause time, its acknowledgement must
-        // arrive before the first resumed frame is sent.
+        // Send the resume marker only after the old frames have drained.
+        // The phone ignores old frames until it receives this marker.
         awaitingForegroundFrame = true
-        channel?.send(readyMessage)
+        readyAfterDrain = readyMessage
         encodeLatest()
         report?("Screen sharing resumed")
     }
 
     private var awaitingForegroundFrame = false
-    private var frameBelongsToForeground = true
 
     private func capture(_ filter: SCContentFilter, knownID: CGDirectDisplayID? = nil) {
         guard !ended, stream == nil else { return }
@@ -260,18 +278,49 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     }
 
     private func encodeLatest() {
-        guard backgroundDeadline == nil, !frameInFlight, let sample = pending, let encoder else { return }
+        guard backgroundDeadline == nil else { return }
+        if let ready = readyAfterDrain {
+            guard frames.isEmpty else { return }
+            readyAfterDrain = nil
+            channel?.send(ready)
+        }
+        guard !encoding, frames.count < frameCapacity, let sample = pending, let encoder else { return }
         pending = nil
-        frameInFlight = true
-        frameBelongsToForeground = true
-        frameSent = Date()
-        deadline = Date().addingTimeInterval(5)
-        encoder.encode(sample, keyFrame: awaitingForegroundFrame) { [weak self] data in
+        encoding = true
+        let started = ProcessInfo.processInfo.systemUptime
+        let frameGeneration = generation
+        if frames.isEmpty { deadline = Date().addingTimeInterval(5) }
+        frames.append(Frame(started: started, generation: frameGeneration))
+        encoder.encode(sample, keyFrame: awaitingForegroundFrame && frames.count == 1) { [weak self] data in
             guard let self, !ended else { return }
             guard let data else { stop("Video encoding interrupted."); return }
-            // The client acknowledges in-flight frames before accepting the new keyframe.
+            frames[frames.count - 1].sent = ProcessInfo.processInfo.systemUptime
+            encoding = false
             channel?.send(data, frame: true)
+            encodeLatest()
         }
+    }
+
+    private func acknowledgeFrame() {
+        guard let frame = frames.first, let sent = frame.sent else { return }
+        frames.removeFirst()
+        let now = ProcessInfo.processInfo.systemUptime
+        let acknowledgement = now - sent
+        if now - frame.started >= 0.12, now - lastSlowFrameLog >= 1 {
+            lastSlowFrameLog = now
+            let encodingMilliseconds = Int((sent - frame.started) * 1000)
+            let acknowledgementMilliseconds = Int(acknowledgement * 1000)
+            videoLog.notice("Slow frame: encode \(encodingMilliseconds) ms, send to ACK \(acknowledgementMilliseconds) ms, \(self.frames.count) pending")
+        }
+        if backgroundDeadline == nil, frame.generation == generation {
+            hasPicture = true
+            awaitingForegroundFrame = false
+        }
+        if let oldest = frames.first {
+            let age = now - oldest.started
+            deadline = Date().addingTimeInterval(max(0, 5 - age))
+        }
+        encodeLatest()
     }
 
     private func tick() {
@@ -281,16 +330,23 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             }
             return
         }
-        if (stream == nil || frameInFlight || !hasPicture) && Date() > deadline { stop("Sharing timed out. Try again."); return }
+        if (stream == nil || !frames.isEmpty || !hasPicture) && Date() > deadline { stop("Sharing timed out. Try again."); return }
         guard hasPicture else { return }
         if Date().timeIntervalSince(lastHeartbeat) > 3 {
             stop("iPhone stopped responding.")
             return
         }
-        if !CGPreflightPostEventAccess() || (frameInFlight && Date().timeIntervalSince(frameSent) > 0.6) { mouse.reset() }
-        channel?.send(.init(.alive, x: displayID != nil && CGPreflightPostEventAccess() ? 1 : 0))
-        focus.refresh()
-        publishFocus()
+        let access = CGPreflightPostEventAccess()
+        if !access || (pictureDelayed && mouse.held) { mouse.reset() }
+        if pictureDelayed {
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastStallLog >= 1 {
+                lastStallLog = now
+                videoLog.notice("Waiting for video acknowledgement; screen-positioned actions paused")
+            }
+        }
+        channel?.send(.init(.alive, x: displayID != nil && access ? 1 : 0))
+        focus.refreshInBackground { [weak self] in self?.publishFocus() }
     }
 
     private func publishFocus(for click: UUID? = nil) {
@@ -327,14 +383,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         if message.kind == .alive { lastHeartbeat = Date(); return }
         if message.kind == .frameAck {
             lastHeartbeat = Date()
-            if frameInFlight {
-                frameInFlight = false
-                if backgroundDeadline == nil && frameBelongsToForeground {
-                    hasPicture = true
-                    awaitingForegroundFrame = false
-                }
-                encodeLatest()
-            }
+            acknowledgeFrame()
             return
         }
         guard backgroundDeadline == nil else { return }
@@ -353,7 +402,8 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             }
             return
         }
-        guard !awaitingForegroundFrame, hasPicture, !frameInFlight || Date().timeIntervalSince(frameSent) < 0.6,
+        let passiveMotion = message.kind == .relative && !mouse.held
+        guard !awaitingForegroundFrame, hasPicture, passiveMotion || !pictureDelayed,
               CGPreflightPostEventAccess(), let displayID, CGDisplayIsActive(displayID) != 0,
               CGDisplayBounds(displayID) == bounds, message.x.isFinite, message.y.isFinite else {
             if message.kind == .insert { channel?.send(.init(.rejected, request: message.request)) }

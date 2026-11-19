@@ -4,16 +4,47 @@ import Carbon
 /// Reads selected text only for an explicit selection-edit transaction.
 final class LinkedFocus {
     private var element: AXUIElement?
+    private let pollingQueue = DispatchQueue(label: "AirPointer.LinkedFocus", qos: .userInitiated)
+    private var polling = false
+    private var revision = 0
     private(set) var token: UUID?
 
     func invalidate() {
+        revision += 1
         snapshot = nil
         element = nil
         token = nil
     }
 
     func refresh() {
-        let current = editableElement()
+        revision += 1
+        let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        setEditableElement(pid.flatMap(Self.editableElement))
+    }
+
+    func refreshInBackground(completion: @escaping () -> Void) {
+        guard !polling else { return }
+        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
+            setEditableElement(nil)
+            completion()
+            return
+        }
+        polling = true
+        let requestedRevision = revision
+        pollingQueue.async { [weak self] in
+            let current = Self.editableElement(pid: pid)
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.polling = false
+                guard self.revision == requestedRevision,
+                      NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
+                self.setEditableElement(IsSecureEventInputEnabled() ? nil : current)
+                completion()
+            }
+        }
+    }
+
+    private func setEditableElement(_ current: AXUIElement?) {
         if let element, let current, CFEqual(element, current) { return }
         snapshot = nil
         element = current
@@ -166,10 +197,9 @@ final class LinkedFocus {
         return AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString) == .success
     }
 
-    private func editableElement() -> AXUIElement? {
-        guard AXIsProcessTrusted(), !IsSecureEventInputEnabled(),
-              let app = NSWorkspace.shared.frontmostApplication else { return nil }
-        let owner = AXUIElementCreateApplication(app.processIdentifier)
+    private static func editableElement(pid: pid_t) -> AXUIElement? {
+        guard AXIsProcessTrusted(), !IsSecureEventInputEnabled() else { return nil }
+        let owner = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(owner, 0.12)
         func value(_ object: AXUIElement, _ attribute: String) -> CFTypeRef? {
             var result: CFTypeRef?
