@@ -4,11 +4,48 @@ import ScreenCaptureKit
 
 /// Main-queue session, owned by one authenticated Bluetooth peer.
 final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput, SCStreamDelegate {
+    // Only the authenticated peer that selected this display may reuse it.
+    private static let preferencesKey = "linked.rememberedDisplays"
+    private(set) static weak var sharing: LinkedHost?
+    private let peer: String
+    let phoneName: String
+    private(set) var displayName = ""
+    private var selectedUUID: String?
+
+    init(peer: String, phoneName: String) {
+        self.peer = peer
+        self.phoneName = phoneName
+        super.init()
+    }
+
+    private static var remembered: [String: String] {
+        UserDefaults.standard.dictionary(forKey: preferencesKey) as? [String: String] ?? [:]
+    }
+    static var hasRememberedDisplays: Bool { !remembered.isEmpty }
+    static func forgetAllDisplays() { UserDefaults.standard.removeObject(forKey: preferencesKey) }
+    var canRememberDisplay: Bool { !ended && selectedUUID != nil }
+    var remembersDisplay: Bool { selectedUUID != nil && Self.remembered[peer] == selectedUUID }
+
+    func setRemembered(_ enabled: Bool) {
+        guard canRememberDisplay else { return }
+        var choices = Self.remembered
+        choices[peer] = enabled ? selectedUUID : nil
+        UserDefaults.standard.set(choices, forKey: Self.preferencesKey)
+    }
+
+    private func displayUUID(_ id: CGDirectDisplayID) -> String? {
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue() else { return nil }
+        return CFUUIDCreateString(nil, uuid) as String
+    }
+
     private var listener: NWListener?
     private var channel: LinkedChannel?
     private var stream: SCStream?
     private var encoder: LinkedEncoder?
     private var pending: CMSampleBuffer?
+    private var latestSample: CMSampleBuffer?
+    private var backgroundDeadline: TimeInterval?
+    private var readyMessage: LinkedMessage?
     private var frameInFlight = false
     private var hasPicture = false
     private var pickerActive = false
@@ -20,6 +57,8 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private var activity: NSObjectProtocol?
     private let mouse = PhoneMouse()
     private let focus = LinkedFocus()
+    private var pendingKeyboardClick: UUID?
+    private var leftPress: (point: CGPoint, time: TimeInterval)?
     private var lastFocus: UUID?
     private var insertionResults: [UUID: Bool] = [:]
     private var lastHeartbeat = Date()
@@ -87,6 +126,27 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         deadline = Date().addingTimeInterval(90)
         report?("Choose a display to share with your paired iPhone")
         channel?.send(.init(.waiting))
+        guard let saved = Self.remembered[peer], CGPreflightScreenCaptureAccess() else {
+            presentPicker()
+            return
+        }
+        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { [weak self] content, _ in
+            DispatchQueue.main.async {
+                guard let self, !self.ended else { return }
+                let matches = content?.displays.filter {
+                    self.displayUUID($0.displayID) == saved && CGDisplayIsActive($0.displayID) != 0 &&
+                        CGDisplayIsAsleep($0.displayID) == 0
+                } ?? []
+                guard Self.remembered[self.peer] == saved, matches.count == 1, let match = matches.first else {
+                    self.presentPicker()
+                    return
+                }
+                self.capture(SCContentFilter(display: match, excludingWindows: []), knownID: match.displayID)
+            }
+        }
+    }
+
+    private func presentPicker() {
         let picker = SCContentSharingPicker.shared
         var config = SCContentSharingPickerConfiguration()
         config.allowedPickerModes = [.singleDisplay]
@@ -109,9 +169,43 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         DispatchQueue.main.async { [weak self] in self?.stop(error.localizedDescription) }
     }
 
-    private func capture(_ filter: SCContentFilter) {
+    func pauseForBackground() {
+        guard !ended, readyMessage != nil, backgroundDeadline == nil else { return }
+        backgroundDeadline = ProcessInfo.processInfo.systemUptime + PhoneProtocol.LinkedLifecycle.grace
+        pending = nil
+        frameBelongsToForeground = false
+        mouse.reset()
+        focus.invalidate()
+        lastFocus = nil
+        report?("Screen sharing paused while iPhone is in the background")
+    }
+
+    func resumeFromBackground() {
+        guard !ended, let backgroundDeadline, let readyMessage else { return }
+        guard ProcessInfo.processInfo.systemUptime < backgroundDeadline else {
+            stop("Sharing paused too long. Choose a display to share again.")
+            return
+        }
+        self.backgroundDeadline = nil
+        hasPicture = false
+        lastHeartbeat = Date()
+        deadline = Date().addingTimeInterval(10)
+        pending = latestSample
+        // If a frame was being sent at pause time, its acknowledgement must
+        // arrive before the first resumed frame is sent.
+        awaitingForegroundFrame = true
+        channel?.send(readyMessage)
+        encodeLatest()
+        report?("Screen sharing resumed")
+    }
+
+    private var awaitingForegroundFrame = false
+    private var frameBelongsToForeground = true
+
+    private func capture(_ filter: SCContentFilter, knownID: CGDirectDisplayID? = nil) {
         guard !ended, stream == nil else { return }
-        if #available(macOS 15.2, *) { displayID = filter.includedDisplays.first?.displayID }
+        displayID = knownID
+        if displayID == nil, #available(macOS 15.2, *) { displayID = filter.includedDisplays.first?.displayID }
         // Earlier pickers do not expose the selected ID. Only one attached screen is unambiguous.
         if displayID == nil, NSScreen.screens.count == 1 { displayID = CGMainDisplayID() }
         rotation = displayID.map(CGDisplayRotation) ?? 0
@@ -134,7 +228,14 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         do { try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: .main) }
         catch { stop(error.localizedDescription); return }
         let title = NSScreen.screens.first { ($0.deviceDescription[.init("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID }?.localizedName ?? "Mac display"
-        channel?.send(.init(.ready, x: Double(config.width), y: Double(config.height), text: title))
+        selectedUUID = displayID.flatMap(displayUUID)
+        displayName = title
+        Self.sharing = self
+        var ready = LinkedMessage(.ready, x: Double(config.width), y: Double(config.height), text: title)
+        ready.supportsGestures = true
+        ready.backgroundResume = true
+        readyMessage = ready
+        channel?.send(ready)
         deadline = Date().addingTimeInterval(10)
         report?("Sharing " + title + " with iPhone")
         stream.startCapture { [weak self] error in
@@ -152,24 +253,34 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         if state == .idle { return }
         if state == .blank || state == .suspended || state == .stopped { stop("Display unavailable. Open the lid or reconnect a display.", mayReconnect: true); return }
         guard state == .complete, sample.imageBuffer != nil else { return }
+        latestSample = sample
+        guard backgroundDeadline == nil else { return }
         pending = sample
         encodeLatest()
     }
 
     private func encodeLatest() {
-        guard !frameInFlight, let sample = pending, let encoder else { return }
+        guard backgroundDeadline == nil, !frameInFlight, let sample = pending, let encoder else { return }
         pending = nil
         frameInFlight = true
+        frameBelongsToForeground = true
         frameSent = Date()
         deadline = Date().addingTimeInterval(5)
-        encoder.encode(sample) { [weak self] data in
+        encoder.encode(sample, keyFrame: awaitingForegroundFrame) { [weak self] data in
             guard let self, !ended else { return }
             guard let data else { stop("Video encoding interrupted."); return }
+            // The client acknowledges in-flight frames before accepting the new keyframe.
             channel?.send(data, frame: true)
         }
     }
 
     private func tick() {
+        if let backgroundDeadline {
+            if ProcessInfo.processInfo.systemUptime >= backgroundDeadline {
+                stop("Sharing paused too long. Choose a display to share again.")
+            }
+            return
+        }
         if (stream == nil || frameInFlight || !hasPicture) && Date() > deadline { stop("Sharing timed out. Try again."); return }
         guard hasPicture else { return }
         if Date().timeIntervalSince(lastHeartbeat) > 3 {
@@ -179,9 +290,33 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         if !CGPreflightPostEventAccess() || (frameInFlight && Date().timeIntervalSince(frameSent) > 0.6) { mouse.reset() }
         channel?.send(.init(.alive, x: displayID != nil && CGPreflightPostEventAccess() ? 1 : 0))
         focus.refresh()
-        if lastFocus != focus.token {
-            lastFocus = focus.token
-            channel?.send(.init(.focus, token: lastFocus))
+        publishFocus()
+    }
+
+    private func publishFocus(for click: UUID? = nil) {
+        guard lastFocus != focus.token || click != nil else { return }
+        lastFocus = focus.token
+        var update = LinkedMessage(.focus, token: lastFocus)
+        update.composerVersion = 1
+        update.keyboardClick = click
+        channel?.send(update)
+    }
+
+    private func checkKeyboardClick(_ id: UUID?, at point: CGPoint) {
+        pendingKeyboardClick = id
+        guard let id else { return }
+        // The remote app updates focus after consuming the posted mouse event.
+        for delay in [0.07, 0.20, 0.38] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, !self.ended, self.backgroundDeadline == nil,
+                      self.pendingKeyboardClick == id, let displayID = self.displayID,
+                      CGDisplayIsActive(displayID) != 0, CGDisplayBounds(displayID) == self.bounds,
+                      self.bounds.contains(point), CGPreflightPostEventAccess() else { return }
+                self.focus.refresh()
+                guard self.focus.matchesClick(at: point) else { return }
+                self.pendingKeyboardClick = nil
+                self.publishFocus(for: id)
+            }
         }
     }
 
@@ -192,18 +327,33 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         if message.kind == .alive { lastHeartbeat = Date(); return }
         if message.kind == .frameAck {
             lastHeartbeat = Date()
-            if frameInFlight { frameInFlight = false; hasPicture = true; encodeLatest() }
+            if frameInFlight {
+                frameInFlight = false
+                if backgroundDeadline == nil && frameBelongsToForeground {
+                    hasPicture = true
+                    awaitingForegroundFrame = false
+                }
+                encodeLatest()
+            }
             return
         }
+        guard backgroundDeadline == nil else { return }
         if message.kind == .keepAwake {
             setAwake(message.x == 1)
             return
         }
         if message.kind == .dragEnd {
+            let press = mouse.held ? leftPress : nil
+            leftPress = nil
             mouse.handle(.init(.leftUp))
+            if let press, ProcessInfo.processInfo.systemUptime - press.time < 0.5,
+               bounds.contains(mouse.location),
+               hypot(mouse.location.x - press.point.x, mouse.location.y - press.point.y) < 5 {
+                checkKeyboardClick(message.keyboardClick, at: press.point)
+            }
             return
         }
-        guard hasPicture, !frameInFlight || Date().timeIntervalSince(frameSent) < 0.6,
+        guard !awaitingForegroundFrame, hasPicture, !frameInFlight || Date().timeIntervalSince(frameSent) < 0.6,
               CGPreflightPostEventAccess(), let displayID, CGDisplayIsActive(displayID) != 0,
               CGDisplayBounds(displayID) == bounds, message.x.isFinite, message.y.isFinite else {
             if message.kind == .insert { channel?.send(.init(.rejected, request: message.request)) }
@@ -215,30 +365,69 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         case .click, .doubleClick, .rightClick, .dragStart, .dragMove:
             mouse.position(at: point)
             switch message.kind {
-            case .click: mouse.handle(.init(.leftDown)); mouse.handle(.init(.leftUp))
-            case .doubleClick: mouse.handle(.init(.doubleClick))
-            case .rightClick: mouse.handle(.init(.rightClick))
-            case .dragStart: mouse.handle(.init(.leftDown))
+            case .click:
+                mouse.handle(.init(.leftDown))
+                mouse.handle(.init(.leftUp))
+                checkKeyboardClick(message.keyboardClick, at: point)
+            case .doubleClick:
+                mouse.handle(.init(.doubleClick))
+                checkKeyboardClick(message.keyboardClick, at: point)
+            case .rightClick:
+                pendingKeyboardClick = nil
+                mouse.handle(.init(.rightClick))
+            case .dragStart:
+                pendingKeyboardClick = nil
+                leftPress = nil
+                mouse.handle(.init(.leftDown))
             default: break
+            }
+        case .gesture:
+            if let gesture = message.padGesture, gesture.isSystemAction || bounds.contains(mouse.location) {
+                mouse.perform(gesture)
             }
         case .relative:
             let p = mouse.location
             mouse.position(at: CGPoint(x: min(bounds.maxX-1, max(bounds.minX, p.x + message.x)),
                                        y: min(bounds.maxY-1, max(bounds.minY, p.y + message.y))))
+            if let press = leftPress, hypot(mouse.location.x - press.point.x, mouse.location.y - press.point.y) >= 5 {
+                leftPress = nil
+            }
         case .currentClick, .currentDown, .currentDouble, .currentRight, .scroll:
             guard bounds.contains(mouse.location) else { return }
             switch message.kind {
-            case .currentClick: mouse.handle(.init(.leftDown)); mouse.handle(.init(.leftUp))
-            case .currentDown: mouse.handle(.init(.leftDown))
-            case .currentDouble: mouse.handle(.init(.doubleClick))
-            case .currentRight: mouse.handle(.init(.rightClick))
-            default: mouse.handle(.init(.scroll, x: message.x, y: message.y))
+            case .currentClick:
+                let point = mouse.location
+                mouse.handle(.init(.leftDown))
+                mouse.handle(.init(.leftUp))
+                checkKeyboardClick(message.keyboardClick, at: point)
+            case .currentDown:
+                pendingKeyboardClick = nil
+                leftPress = (mouse.location, ProcessInfo.processInfo.systemUptime)
+                mouse.handle(.init(.leftDown))
+            case .currentDouble:
+                let point = mouse.location
+                mouse.handle(.init(.doubleClick))
+                checkKeyboardClick(message.keyboardClick, at: point)
+            case .currentRight:
+                pendingKeyboardClick = nil
+                mouse.handle(.init(.rightClick))
+            default: mouse.handle(.init(.scroll, x: message.x, y: message.y, phase: message.scrollPhase ?? 0))
             }
         case .insert:
             guard let request = message.request, let text = message.text else { return }
+            if message.readSelection == true {
+                guard let selection = focus.readSelection(token: message.token) else {
+                    channel?.send(.init(.rejected, request: request)); return
+                }
+                var reply = LinkedMessage(.inserted, token: message.token, request: request, text: selection.text)
+                reply.selection = selection.id
+                reply.styles = selection.styles
+                channel?.send(reply)
+                return
+            }
             if insertionResults[request] == nil {
                 guard insertionResults.count < 4096 else { stop("Start a new sharing session to continue typing."); return }
-                insertionResults[request] = focus.insert(text, token: message.token)
+                insertionResults[request] = focus.commit(text, message: message)
             }
             channel?.send(.init(insertionResults[request] == true ? .inserted : .rejected, request: request))
         default: break
@@ -253,6 +442,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     func stop(_ reason: String = "Screen sharing ended.", mayReconnect: Bool = false) {
         guard !ended else { return }
         ended = true
+        if Self.sharing === self { Self.sharing = nil }
         timer?.invalidate()
         for (center, observer) in observers { center.removeObserver(observer) }
         observers.removeAll()
@@ -267,7 +457,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         let closing = channel
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { closing?.close() }
         stream?.stopCapture(completionHandler: { _ in })
-        stream = nil; pending = nil; encoder = nil; channel = nil
+        stream = nil; pending = nil; latestSample = nil; encoder = nil; channel = nil
         report?(reason)
         onEnd?()
     }

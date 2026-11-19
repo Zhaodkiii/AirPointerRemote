@@ -82,6 +82,30 @@ struct PhoneProtocolChecks {
             let clamped = Displays.clamp(point)
             precondition(Displays.bounds(containing: clamped).contains(clamped))
         }
+        events.removeAll()
+        var openedApps: [String] = []
+        mouse.openSystemApp = { openedApps.append($0); return true }
+        mouse.perform(.missionControl)
+        mouse.perform(.apps)
+        precondition(openedApps == ["Mission Control", "Apps"] && events.isEmpty)
+        precondition(PhoneProtocol.PadGesture.desktop.isSystemAction && !PhoneProtocol.PadGesture.zoomIn.isSystemAction)
+        mouse.openSystemApp = { _ in false }
+        let mission = PhoneProtocol.Command(.padGesture, phase: PhoneProtocol.PadGesture.missionControl.rawValue)
+        mouse.handle(PhoneProtocol.Command(data: mission.data)!)
+        precondition(events.map(\.type) == [.keyDown, .keyUp])
+        precondition(events.allSatisfy {
+            $0.flags.contains(.maskControl) && $0.getIntegerValueField(.keyboardEventKeycode) == 126
+        })
+        mouse.handle(.init(.padGesture, phase: 255))
+        precondition(events.count == 2, "Unknown gestures must produce no input")
+        for (gesture, arrow) in [(PhoneProtocol.PadGesture.nextSpace, Int64(124)), (.previousSpace, 123)] {
+            events.removeAll()
+            mouse.perform(gesture)
+            precondition(events.map(\.type) == [.flagsChanged, .keyDown, .keyUp, .flagsChanged])
+            precondition(events.map { $0.getIntegerValueField(.keyboardEventKeycode) } == [59, arrow, arrow, 59])
+            precondition(events[1].flags.contains([.maskControl, .maskSecondaryFn, .maskNumericPad]))
+            precondition(events[3].flags.isEmpty)
+        }
         var air = AirMotionFilter()
         let identity = simd_quatd(angle: 0, axis: SIMD3(0, 0, 1))
         precondition(air.sample(orientation: identity, time: 0, scale: 1800) == nil)

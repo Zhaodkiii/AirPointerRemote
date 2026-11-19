@@ -19,6 +19,7 @@ final class PhoneReceiver {
         var phoneApproved = false
         var authorized = false
         var lastSeen = ProcessInfo.processInfo.systemUptime
+        var backgroundDeadline: TimeInterval?
         var lastStatus = 0.0
         init(_ central: CBCentral) { self.central = central }
     }
@@ -152,12 +153,29 @@ final class PhoneReceiver {
             status(session, state: "disconnected")
             return
         }
-        if command.action == .linkEnd { endSharing(); return }
+        if command.action == .linkEnd { session.backgroundDeadline = nil; endSharing(); return }
+        if command.action == .heartbeat,
+           let lifecycle = PhoneProtocol.LinkedLifecycle(rawValue: command.phase), let host = linked {
+            switch lifecycle {
+            case .background:
+                if session.backgroundDeadline == nil {
+                    session.backgroundDeadline = session.lastSeen + PhoneProtocol.LinkedLifecycle.grace
+                    DispatchQueue.main.async { host.pauseForBackground() }
+                }
+            case .foreground:
+                if session.backgroundDeadline != nil {
+                    session.backgroundDeadline = nil
+                    DispatchQueue.main.async { host.resumeFromBackground() }
+                }
+            }
+            return
+        }
+        if session.backgroundDeadline != nil, ![.stop, .pause, .heartbeat].contains(command.action) { return }
         if command.action == .linkStart {
             guard !paused, let first = UInt32(exactly: command.x), let second = UInt32(exactly: command.y) else { return }
             endSharing()
             mouse.reset()
-            let host = LinkedHost()
+            let host = LinkedHost(peer: session.peerKey.base64EncodedString(), phoneName: session.name)
             linked = host
             let offer = LinkedOffer(key: key, first: first, second: second)
             let state = onState
@@ -172,7 +190,7 @@ final class PhoneReceiver {
             }
             return
         }
-        if command.action == .pause || command.action == .stop { endSharing() }
+        if command.action == .pause || command.action == .stop { session.backgroundDeadline = nil; endSharing() }
         if linked != nil, ![.pause, .resume, .heartbeat, .stop].contains(command.action) { return }
         if command.action == .move { movementCount += 1 }
         if command.action == .pause { remotelyPaused = true; mouse.reset() }
@@ -229,14 +247,14 @@ final class PhoneReceiver {
         if let activeID, let session = sessions[activeID] {
             publishActivity(session)
             if now - session.lastSeen > 0.3 { mouse.reset() }
-            if now - session.lastSeen > 3 {
+            if now > (session.backgroundDeadline ?? session.lastSeen + 3) {
                 session.authorized = false
                 endSharing()
                 self.activeID = nil
                 onEndControl?()
                 status(session, state: "timeout")
                 onState?("iPhone connection timed out. Control stopped.")
-            } else if now - session.lastStatus > 1 { status(session) }
+            } else if session.backgroundDeadline == nil, now - session.lastStatus > 1 { status(session) }
         }
         let expired = sessions.filter { !$0.value.authorized && now - $0.value.lastSeen > 90 }.map(\.key)
         for id in expired {

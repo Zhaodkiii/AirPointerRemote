@@ -108,11 +108,20 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     func setForeground(_ active: Bool) {
         foreground = active
         if active {
+            if linkedParked {
+                linkedParked = false
+                lastStatus = ProcessInfo.processInfo.systemUptime
+                send(.init(.heartbeat, phase: PhoneProtocol.LinkedLifecycle.foreground.rawValue))
+            }
             scan()
         } else {
-            // Cancellation plus the Mac watchdog releases any in-flight button-down.
-            disconnect(reconnect: shouldReconnect)
             central.stopScan()
+            if linkedRequested && linkedCanSuspend && connected {
+                linkedParked = true
+                send(.init(.heartbeat, phase: PhoneProtocol.LinkedLifecycle.background.rawValue))
+            } else {
+                disconnect(reconnect: shouldReconnect)
+            }
         }
     }
 
@@ -124,7 +133,11 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     }
 
     private(set) var linkedRequested = false
+    private var linkedParked = false
+    var linkedCanSuspend = false
     func finishLinkedScreen() {
+        linkedCanSuspend = false
+        linkedParked = false
         linkedRequested = false
         send(.init(.linkEnd))
     }
@@ -151,7 +164,8 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
             chunks.removeAll()
             pendingMove = .zero
         }
-        if command.action == .heartbeat, commands.contains(where: { $0.action == .heartbeat }) { return }
+        if command.action == .heartbeat, command.phase == 0,
+           commands.contains(where: { $0.action == .heartbeat && $0.phase == 0 }) { return }
         if command.action == .scroll, command.phase == 2,
            let last = commands.last, last.action == .scroll, last.phase == 2 {
             commands[commands.count - 1] = .init(.scroll, x: last.x + command.x, y: last.y + command.y, time: command.time, phase: 2)
@@ -240,6 +254,8 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         onDisconnect?()
         connected = false
         linkedRequested = false
+        linkedParked = false
+        linkedCanSuspend = false
         accessibility = false
         macPaused = false
         connecting = false

@@ -14,12 +14,25 @@ import Foundation
         var passed = false
         let encoder = LinkedEncoder(width: 320, height: 180)!
         let decoder = LinkedDecoder()
+        var firstSample: CMSampleBuffer?
+        var framesDecoded = 0
         precondition(decoder.sample(from: Data([1, 0])) == nil)
         listener.newConnectionHandler = { conn in
             server = LinkedChannel(conn)
             server?.onMessage = { message in
-                if message.kind == .frameAck { passed = true; return }
+                if message.kind == .frameAck {
+                    if framesDecoded == 1, let firstSample {
+                        encoder.encode(firstSample, keyFrame: true) { packet in
+                            precondition(packet != nil)
+                            server?.send(packet!, frame: true)
+                        }
+                    } else {
+                        passed = framesDecoded == 2
+                    }
+                    return
+                }
                 precondition(message.kind == .insert && message.text == "中文 🖱️")
+                precondition(message.styles?.first?.style == 3 && message.selection != nil)
                 var pixels: CVPixelBuffer?
                 precondition(CVPixelBufferCreate(nil, 320, 180, kCVPixelFormatType_32BGRA,
                     [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &pixels) == 0)
@@ -29,6 +42,7 @@ import Foundation
                 var sample: CMSampleBuffer?
                 CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: pixels!, formatDescription: format!,
                     sampleTiming: &timing, sampleBufferOut: &sample)
+                firstSample = sample
                 encoder.encode(sample!) { packet in
                     precondition(packet != nil)
                     server?.send(packet!, frame: true)
@@ -40,9 +54,15 @@ import Foundation
             if case .ready = state {
                 let conn = NWConnection(host: "127.0.0.1", port: listener.port!, using: offer.parameters)
                 client = LinkedChannel(conn)
-                client?.onReady = { client?.send(.init(.insert, text: "中文 🖱️")) }
+                client?.onReady = {
+                    var edit = LinkedMessage(.insert, text: "中文 🖱️")
+                    edit.styles = [.init(start: 0, count: 2, style: 3)]
+                    edit.selection = UUID()
+                    client?.send(edit)
+                }
                 client?.onFrame = { bytes in
-                    let output = decoder.sample(from: bytes)
+                    let resumed = framesDecoded == 1
+                    let output = (resumed ? LinkedDecoder() : decoder).sample(from: bytes)
                     precondition(output?.formatDescription?.dimensions.width == 320)
                     var decoded: VTDecompressionSession?
                     precondition(VTDecompressionSessionCreate(allocator: nil, formatDescription: output!.formatDescription!,
@@ -51,7 +71,10 @@ import Foundation
                     let status = VTDecompressionSessionDecodeFrame(decoded!, sampleBuffer: output!, flags: [],
                         infoFlagsOut: nil) { error, _, buffer, _, _ in
                         precondition(error == noErr && buffer != nil)
-                        DispatchQueue.main.async { client?.send(.init(.frameAck)) }
+                        DispatchQueue.main.async {
+                            framesDecoded += 1
+                            client?.send(.init(.frameAck))
+                        }
                     }
                     precondition(status == noErr)
                     VTDecompressionSessionWaitForAsynchronousFrames(decoded!)
@@ -64,7 +87,7 @@ import Foundation
         while !passed && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
         precondition(passed, "No authenticated frame round trip")
         listener.cancel(); server?.close(); client?.close()
-        print("Passed: wrong PSK rejected, TLS-PSK localhost, Unicode control, H.264 encode/transport/decode, frame acknowledgement.")
+        print("Passed: wrong PSK rejected, TLS-PSK localhost, Unicode control, H.264 encode/transport/decode, fresh decoder after resume, frame acknowledgement.")
     }
     private static func verifyWrongKeyIsRefused(_ offer: LinkedOffer) throws {
         let server = try NWListener(using: offer.parameters)

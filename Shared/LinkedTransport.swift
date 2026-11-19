@@ -37,8 +37,23 @@ struct LinkedMessage: Codable {
     enum Kind: String, Codable {
         case alive, waiting, ready, focus, insert, inserted, rejected, stop, frameAck, keepAwake
         case click, doubleClick, rightClick, dragStart, dragMove, dragEnd, relative, scroll
-        case currentClick, currentRight, currentDouble, currentDown
+        case currentClick, currentRight, currentDouble, currentDown, gesture
     }
+    struct StyleRun: Codable {
+        var start: Int
+        var count: Int
+        // Bits 0–2 represent bold, italic and underline.
+        var style: Int
+    }
+    var styles: [StyleRun]?
+    var selection: UUID?
+    var readSelection: Bool?
+    var composerVersion: Int?
+    var keyboardClick: UUID?
+    var scrollPhase: UInt8?
+    var supportsGestures: Bool?
+    var padGesture: PhoneProtocol.PadGesture?
+    var backgroundResume: Bool?
     var kind: Kind
     var x: Double = 0
     var y: Double = 0

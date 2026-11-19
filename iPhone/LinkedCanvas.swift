@@ -3,35 +3,46 @@ import SwiftUI
 
 struct LinkedCanvas: UIViewRepresentable {
     let client: LinkedClient
-    let direct: Bool
+    enum Surface { case display, direct, trackpad }
+    let surface: Surface
     let drag: Bool
     let reset: Int
 
     func makeUIView(context: Context) -> Canvas {
         let view = Canvas()
         view.client = client
-        view.layer.addSublayer(client.video)
+        view.surface = surface
+        if surface == .trackpad {
+            view.backgroundColor = .secondarySystemGroupedBackground
+            view.layer.cornerRadius = 18
+            view.accessibilityLabel = "Mac trackpad"
+        } else { view.layer.addSublayer(client.video) }
         return view
     }
     func updateUIView(_ view: Canvas, context: Context) {
-        if view.drag != drag || view.direct != direct {
+        if view.drag != drag || view.surface != surface {
             view.endDrag()
         }
-        view.direct = direct
+        view.surface = surface
         view.drag = drag
         if view.reset != reset { view.zoom = 1; view.offset = .zero; view.reset = reset }
         view.setNeedsLayout()
     }
 
+    static func dismantleUIView(_ view: Canvas, coordinator: ()) { view.endDrag() }
+
     final class Canvas: UIView, UIGestureRecognizerDelegate {
+        override var editingInteractionConfiguration: UIEditingInteractionConfiguration { .none }
         weak var client: LinkedClient?
-        var direct = true, drag = false, reset = 0
+        var surface = Surface.display
+        var drag = false, reset = 0
         var zoom = CGFloat(1), offset = CGPoint.zero
         private var dragging = false
         private var rect = CGRect.zero
 
         override init(frame: CGRect) {
             super.init(frame: frame)
+            isMultipleTouchEnabled = true
             clipsToBounds = true
             backgroundColor = .black
             accessibilityLabel = "Shared Mac display"
@@ -39,19 +50,52 @@ struct LinkedCanvas: UIViewRepresentable {
             let twice = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
             twice.numberOfTapsRequired = 2
             tap.require(toFail: twice)
+            let secondary = UITapGestureRecognizer(target: self, action: #selector(secondaryTap))
+            secondary.numberOfTouchesRequired = 2
+            tap.require(toFail: secondary)
             let right = UILongPressGestureRecognizer(target: self, action: #selector(rightClick(_:)))
             let slide = UIPanGestureRecognizer(target: self, action: #selector(pan(_:)))
             slide.maximumNumberOfTouches = 1
             let two = UIPanGestureRecognizer(target: self, action: #selector(twoFingers(_:)))
             two.minimumNumberOfTouches = 2; two.maximumNumberOfTouches = 2
             let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:)))
-            for recognizer in [tap, twice, right, slide, two, pinch] { addGestureRecognizer(recognizer); recognizer.delegate = self }
+            let gestures = PadMotionRecognizer()
+            gestures.available = { [weak self] in self?.surface == .trackpad }
+            gestures.action = { [weak self] gesture in
+                var message = LinkedMessage(.gesture)
+                message.padGesture = gesture
+                self?.client?.control(message)
+            }
+            gestures.scroll = { [weak self] delta, phase, _ in
+                let natural = UserDefaults.standard.object(forKey: "naturalScroll") as? Bool ?? true
+                var message = LinkedMessage(.scroll, x: natural ? delta.x : -delta.x, y: natural ? delta.y : -delta.y)
+                message.scrollPhase = phase
+                self?.client?.control(message)
+            }
+            addGestureRecognizer(gestures)
+            installSmartTap(on: self, single: secondary, motion: gestures)
+            for recognizer in [tap, twice, secondary, right, slide, two, pinch] { addGestureRecognizer(recognizer); recognizer.delegate = self }
         }
         required init?(coder: NSCoder) { nil }
 
+        override func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+            if gesture is UILongPressGestureRecognizer { return surface == .direct && !drag }
+            if gesture is UIPinchGestureRecognizer { return surface != .trackpad }
+            if let pan = gesture as? UIPanGestureRecognizer {
+                if pan.minimumNumberOfTouches == 2 { return surface != .trackpad }
+                return surface != .display
+            }
+            return surface != .display
+        }
+
+        func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            surface != .trackpad && ((gesture is UIPinchGestureRecognizer && other is UIPanGestureRecognizer)
+                || (gesture is UIPanGestureRecognizer && other is UIPinchGestureRecognizer))
+        }
+
         override func layoutSubviews() {
             super.layoutSubviews()
-            guard let client, bounds.width > 0, bounds.height > 0 else { return }
+            guard surface != .trackpad, let client, bounds.width > 0, bounds.height > 0 else { return }
             let factor = min(bounds.width / client.size.width, bounds.height / client.size.height) * zoom
             let w = client.size.width * factor, h = client.size.height * factor
             let maxX = max(0, (w-bounds.width)/2), maxY = max(0, (h-bounds.height)/2)
@@ -70,29 +114,33 @@ struct LinkedCanvas: UIViewRepresentable {
         }
         @objc private func tapped(_ g: UITapGestureRecognizer) {
             let twice = g.numberOfTapsRequired == 2
-            if direct { send(twice ? .doubleClick : .click, at: g.location(in: self)) }
+            guard surface != .display else { return }
+            if surface == .direct { send(twice ? .doubleClick : .click, at: g.location(in: self)) }
             else { client?.control(.init(twice ? .currentDouble : .currentClick)) }
         }
+        @objc private func secondaryTap() {
+            if surface == .trackpad { client?.control(.init(.currentRight)) }
+        }
         @objc private func rightClick(_ g: UILongPressGestureRecognizer) {
-            guard g.state == .began, !drag else { return }
-            if direct { send(.rightClick, at: g.location(in: self)) }
-            else { client?.control(.init(.currentRight)) }
+            guard surface == .direct, g.state == .began, !drag else { return }
+            send(.rightClick, at: g.location(in: self))
         }
         func endDrag() { if dragging { client?.control(.init(.dragEnd)); dragging = false } }
         @objc private func pan(_ g: UIPanGestureRecognizer) {
+            guard surface != .display else { return }
             let p = g.location(in: self), delta = g.translation(in: self)
             g.setTranslation(.zero, in: self)
             switch g.state {
             case .began:
                 if drag {
                     let start = CGPoint(x: p.x-delta.x, y: p.y-delta.y)
-                    guard !direct || rect.contains(start) else { return }
-                    if direct { send(.dragStart, at: start) } else { client?.control(.init(.currentDown)) }
+                    guard surface != .direct || rect.contains(start) else { return }
+                    if surface == .direct { send(.dragStart, at: start) } else { client?.control(.init(.currentDown)) }
                     dragging = true
                 }
                 fallthrough
             case .changed:
-                if direct {
+                if surface == .direct {
                     if dragging { send(.dragMove, at: p, clamp: true) }
                 } else {
                     let velocity = g.velocity(in: self)
@@ -105,11 +153,11 @@ struct LinkedCanvas: UIViewRepresentable {
         @objc private func twoFingers(_ g: UIPanGestureRecognizer) {
             let delta = g.translation(in: self)
             g.setTranslation(.zero, in: self)
-            if direct { offset.x += delta.x; offset.y += delta.y; setNeedsLayout() }
+            if surface != .trackpad { offset.x += delta.x; offset.y += delta.y; setNeedsLayout() }
             else { client?.control(.init(.scroll, x: delta.x, y: delta.y)) }
         }
         @objc private func pinch(_ g: UIPinchGestureRecognizer) {
-            guard direct else { return }
+            guard surface != .trackpad else { return }
             let old = zoom
             zoom = min(5, max(1, zoom * g.scale))
             let p = g.location(in: self), ratio = zoom / old

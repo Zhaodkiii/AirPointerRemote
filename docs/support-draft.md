@@ -12,7 +12,7 @@ To stop control, choose **Stop All Control** from the Mac menu or press **Contro
 
 ## View the Mac display on iPhone
 
-Pair over Bluetooth, connect both devices to a local network, and tap the Linked Screen icon on iPhone. Tap **Start Sharing** and select a display in the Mac system picker. Grant Local Network access when prompted. If discovery times out, check both devices’ local network permissions and whether the Wi-Fi network isolates clients.
+Pair over Bluetooth, connect both devices to a local network, and tap the Linked Screen icon on iPhone. Tap **Start Sharing** and select a display in the Mac system picker. During sharing, choose **Remember “display” for iPhone** from the Mac menu bar to reuse that display for the same paired phone. Allow Screen Recording on the Mac when prompted. If the display is unavailable, choose a display again. To reset this preference, choose **Forget All Remembered Displays**. Grant Local Network access when prompted. If discovery times out, check both devices’ local network permissions and whether the Wi-Fi network isolates clients.
 
 Tap to click, hold for a right click, or enable Drag and slide. In Direct mode, pinch to zoom and pan with two fingers. In Trackpad mode, two fingers scroll the Mac. Click an editable Mac field, type on iPhone and tap **Insert**. Password fields and unsupported editors do not accept linked text. Use the target app’s own Send or Save control afterward.
 

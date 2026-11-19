@@ -8,6 +8,14 @@ struct ContentView: View {
     @State private var showHelp = false
     @State private var confirmNewIdentity = false
 
+    @AppStorage("pad.zoom") private var zoomGesture = true
+    @AppStorage("pad.fit") private var fitGesture = true
+    @AppStorage("pad.rotate") private var rotateGesture = true
+    @AppStorage("pad.pages") private var pagesGesture = false
+    @AppStorage("pad.notifications") private var notificationsGesture = true
+    @AppStorage("pad.spaces") private var spacesGesture = true
+    @AppStorage("pad.four") private var fourGesture = true
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
@@ -183,6 +191,16 @@ struct ContentView: View {
                 Section("Scrolling") {
                     Toggle("Natural Scrolling", isOn: $controller.naturalScroll)
                     Toggle("Inertial Scrolling", isOn: $controller.inertia)
+                }
+                Section("Mac Gestures") {
+                    Toggle("Pinch to Zoom", isOn: $zoomGesture)
+                    Toggle("Two-Finger Double Tap to Fit or Reset Zoom", isOn: $fitGesture)
+                    Toggle("Two-Finger Rotation", isOn: $rotateGesture)
+                    Toggle("Two-Finger Horizontal Swipe to Navigate", isOn: $pagesGesture)
+                    Toggle("Two-Finger Swipe from Right Edge for Notifications", isOn: $notificationsGesture)
+                    Toggle("Three-Finger Swipes for Spaces and Windows", isOn: $spacesGesture)
+                    Toggle("Four-Finger Pinch for Apps or Spread for Desktop", isOn: $fourGesture)
+                    Text("Also applies below the shared display. Page navigation takes over horizontal scrolling. Zoom, rotation and navigation use commands available in the active Mac app.")
                 }
                 Section("Connection") {
                     Button("Forget Paired Mac", role: .destructive) { controller.stop(); connection.forget(); settings = false }

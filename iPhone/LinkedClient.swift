@@ -9,6 +9,16 @@ final class LinkedClient: ObservableObject {
     @Published private(set) var size = CGSize(width: 16, height: 9)
     @Published private(set) var focus: UUID?
     @Published var draft = ""
+    let richEditor: UITextView = {
+        let view = UITextView()
+        view.font = .preferredFont(forTextStyle: .body)
+        view.textColor = .label
+        return view
+    }()
+    @Published private(set) var supportsEditing = false
+    @Published private(set) var selectionID: UUID?
+    @Published var editorHint: String?
+    private var readingSelection = false
     @Published var editing = false
     @Published private(set) var submitting: UUID?
     @Published private(set) var awake = UserDefaults.standard.bool(forKey: "linked.keepMacAwake")
@@ -16,6 +26,7 @@ final class LinkedClient: ObservableObject {
     // Resume only after a fresh authenticated Bluetooth connection to the same Mac.
     @Published private(set) var resumeMac: UUID?
     private var target: UUID?
+    private var pendingKeyboardClick: (id: UUID, time: TimeInterval)?
     private var decoder = LinkedDecoder()
     let video = AVSampleBufferDisplayLayer()
     private weak var phone: PhoneConnection?
@@ -24,10 +35,16 @@ final class LinkedClient: ObservableObject {
     private var timeout: Timer?
     private var deadline = Date()
     private var displayName = "Mac display"
+    private var uiActive = true
+    private var pausedAt: TimeInterval?
+    private var waitingForResumeFrame = false
+    @Published private(set) var resuming = false
+    @Published private(set) var canRetrySharing = false
 
     func start(_ phone: PhoneConnection) {
         guard !running, let offer = phone.beginLinkedScreen() else { return }
         resumeMac = nil
+        canRetrySharing = false
         self.phone = phone
         sessionMac = phone.connectedMacID
         running = true
@@ -53,6 +70,7 @@ final class LinkedClient: ObservableObject {
         browser.start(queue: .main)
         timeout = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self else { return }
+            guard pausedAt == nil else { return }
             if live { channel?.send(.init(.alive)) }
             guard Date() > deadline else { return }
             interrupted(live ? "Mac stopped responding. Start sharing again." : "Timed out. Check both apps, Local Network access and Wi-Fi, then retry.")
@@ -65,11 +83,26 @@ final class LinkedClient: ObservableObject {
         link.onClose = { [weak self] reason in self?.interrupted(reason) }
         link.onMessage = { [weak self] in self?.receive($0) }
         link.onFrame = { [weak self] bytes in
-            guard let self, let sample = decoder.sample(from: bytes), video.sampleBufferRenderer.status != .failed else {
-                self?.end("Video playback interrupted. Start sharing again."); return
+            guard let self else { return }
+            if pausedAt != nil || waitingForResumeFrame {
+                channel?.send(.init(.frameAck))
+                return
             }
-            video.sampleBufferRenderer.enqueue(sample)
+            let renderer = video.sampleBufferRenderer
+            if resuming {
+                // iOS can revoke the video decoder when the app backgrounds.
+                // The Mac sends an independent keyframe after its ready message.
+                renderer.flush(removingDisplayedImage: true)
+                decoder = LinkedDecoder()
+        pendingKeyboardClick = nil
+            }
+            guard (resuming || renderer.status != .failed), let sample = decoder.sample(from: bytes) else {
+                end("Video playback interrupted. Resume sharing to try again.", keepDraft: true)
+                return
+            }
+            renderer.enqueue(sample)
             live = true
+            resuming = false
             deadline = Date().addingTimeInterval(5)
             channel?.send(.init(.frameAck))
         }
@@ -82,6 +115,10 @@ final class LinkedClient: ObservableObject {
             deadline = Date().addingTimeInterval(95)
             status = "Choose the display to share on your Mac."
         case .ready:
+            supportsGestures = message.supportsGestures == true
+            guard pausedAt == nil else { return }
+            waitingForResumeFrame = false
+            if !resuming { phone?.linkedCanSuspend = message.backgroundResume == true }
             if awake { channel?.send(.init(.keepAwake, x: 1)) }
             guard message.x > 0, message.y > 0 else { end("Invalid display size."); return }
             size = CGSize(width: message.x, height: message.y)
@@ -89,49 +126,120 @@ final class LinkedClient: ObservableObject {
             status = displayName
             deadline = Date().addingTimeInterval(12)
         case .alive:
+            guard pausedAt == nil, !resuming else { return }
             deadline = Date().addingTimeInterval(5)
             canPoint = message.x == 1
         case .focus:
+            guard pausedAt == nil, !resuming else { return }
+            supportsEditing = message.composerVersion == 1
             focus = message.token
-            if draft.isEmpty {
+            if draft.isEmpty && selectionID == nil {
                 target = focus
-                editing = focus != nil
             } else if target != focus {
-                status = "Focus changed. Choose a field before inserting your draft."
+                editorHint = "Focus changed. Confirm the new Mac field before inserting."
+            }
+            if focus == nil {
+                // Focus can briefly clear while a user click moves between fields.
+                closeComposer()
+                return
+            }
+            if let click = pendingKeyboardClick, click.id == message.keyboardClick {
+                pendingKeyboardClick = nil
+                if uiActive, live, canPoint,
+                   ProcessInfo.processInfo.systemUptime - click.time < 1 {
+                    openKeyboard()
+                }
             }
         case .inserted, .rejected:
             guard let request = submitting, request == message.request else { return }
             submitting = nil
+            if readingSelection {
+                readingSelection = false
+                guard message.kind == .inserted, message.token == focus, let id = message.selection,
+                      let text = message.text else { editorHint = "Select text on the Mac, then try again."; return }
+                target = focus
+                selectionID = id
+                draft = text
+                richEditor.attributedText = MacDraftEditor.attributed(text, styles: message.styles ?? [])
+                richEditor.selectedRange = NSRange(location: (text as NSString).length, length: 0)
+                editorHint = "Editing selected text"
+                return
+            }
             if message.kind == .inserted { cancelDraft(); status = "Text sent to the selected Mac field." }
-            else { status = "Text could not be inserted. Check the selected Mac field." }
+            else { editorHint = "Edit rejected. Check the Mac field and selection." }
         case .stop:
             let reason = message.text ?? "Sharing ended."
-            if message.x == 1 { interrupted(reason) } else { end(reason) }
+            if message.x == 1 { interrupted(reason) } else { end(reason, keepDraft: resuming || pausedAt != nil) }
         default: break
+        }
+    }
+
+    func sceneChanged(active: Bool, background: Bool) {
+        uiActive = active
+        if !active { pendingKeyboardClick = nil; releaseLinkedButton() }
+
+        if background {
+            guard running, pausedAt == nil else { return }
+            guard (live || resuming), phone?.linkedCanSuspend == true else {
+                end("Sharing paused. Resume when you’re ready.", keepDraft: true)
+                return
+            }
+            pausedAt = ProcessInfo.processInfo.systemUptime
+            waitingForResumeFrame = true
+            resuming = true
+            live = false
+            canPoint = false
+            focus = nil
+            target = nil
+            selectionID = nil
+            richEditor.resignFirstResponder()
+            status = "Screen sharing paused."
+        } else if active, let pausedAt {
+            self.pausedAt = nil
+            guard ProcessInfo.processInfo.systemUptime - pausedAt < PhoneProtocol.LinkedLifecycle.grace else {
+                end("Sharing paused too long. Choose a display to share again.", keepDraft: true)
+                return
+            }
+            deadline = Date().addingTimeInterval(8)
+            status = "Restoring the shared display…"
+            if submitting != nil {
+                submitting = nil
+                readingSelection = false
+                editorHint = "Check the Mac before submitting this draft again."
+            } else if !draft.isEmpty {
+                editorHint = "Confirm the Mac field before inserting your draft."
+            }
         }
     }
 
     func interrupted(_ reason: String) {
         guard running else { return }
         let id = sessionMac
-        let activeSession = live
-        end(reason)
-        if activeSession { resumeMac = id }
+        let shouldRetryAfterWake = live && !resuming && pausedAt == nil
+        end(reason, keepDraft: true)
+        if shouldRetryAfterWake { resumeMac = id }
     }
 
     private var sessionMac: UUID?
     func connectionChanged(_ phone: PhoneConnection) {
         if !phone.connected {
-            interrupted("Mac disconnected. Waiting for it to wake…")
-        } else if let resumeMac, phone.connectedMacID == resumeMac, !phone.macPaused {
+            interrupted("Connection to the Mac was interrupted.")
+        } else if let resumeMac, phone.connectedMacID == resumeMac, !phone.macPaused, uiActive {
             start(phone)
         }
     }
 
-    func end(_ reason: String = "Sharing ended.") {
+    func end(_ reason: String = "Sharing ended.", keepDraft: Bool = false) {
         resumeMac = nil
         sessionMac = nil
-        guard running else { return }
+        canRetrySharing = keepDraft
+        guard running else {
+            if !keepDraft { cancelDraft() }
+            return
+        }
+        pausedAt = nil
+        waitingForResumeFrame = false
+        resuming = false
         running = false; live = false
         status = submitting == nil ? reason : "Sharing ended. Check the Mac before inserting again."
         browser?.cancel(); browser = nil
@@ -140,12 +248,39 @@ final class LinkedClient: ObservableObject {
         phone?.finishLinkedScreen(); phone = nil
         video.sampleBufferRenderer.flush(removingDisplayedImage: true)
         decoder = LinkedDecoder()
+        pendingKeyboardClick = nil
         focus = nil; submitting = nil; canPoint = false
-        cancelDraft()
+        if keepDraft && !draft.isEmpty {
+            target = nil
+            selectionID = nil
+            readingSelection = false
+            editorHint = "Confirm the Mac field before inserting your draft."
+        } else { cancelDraft() }
     }
 
-    func control(_ message: LinkedMessage) {
-        guard live, canPoint else { return }
+    func releaseLinkedButton(userClick: Bool = false) {
+        var message = LinkedMessage(.dragEnd)
+        if userClick && uiActive && live && canPoint { markKeyboardClick(&message) }
+        channel?.send(message)
+    }
+
+    private var supportsGestures = false
+
+    private func markKeyboardClick(_ message: inout LinkedMessage) {
+        let id = UUID()
+        pendingKeyboardClick = (id, ProcessInfo.processInfo.systemUptime)
+        message.keyboardClick = id
+    }
+
+    func control(_ command: LinkedMessage) {
+        guard uiActive, live, canPoint else { return }
+        if command.kind == .gesture && !supportsGestures { return }
+        var message = command
+        switch message.kind {
+        case .click, .doubleClick, .currentClick, .currentDouble: markKeyboardClick(&message)
+        case .currentDown, .dragStart, .rightClick, .currentRight: pendingKeyboardClick = nil
+        default: break
+        }
         channel?.send(message)
     }
     func setAwake(_ enabled: Bool) {
@@ -153,14 +288,57 @@ final class LinkedClient: ObservableObject {
         UserDefaults.standard.set(enabled, forKey: "linked.keepMacAwake")
         if live { channel?.send(.init(.keepAwake, x: enabled ? 1 : 0)) }
     }
-    func openKeyboard() { target = focus; editing = true }
-    func cancelDraft() { draft = ""; editing = false; target = nil }
-    var canInsert: Bool { live && canPoint && focus != nil && focus == target && !draft.isEmpty && draft.utf8.count <= 16384 && submitting == nil }
+    func openKeyboard() {
+        guard focus != nil else { return }
+        if draft.isEmpty && selectionID == nil { target = focus }
+        editing = true
+    }
+
+    func useNewField() {
+        selectionID = nil
+        target = focus
+        editorHint = nil
+    }
+
+    func hideKeyboard() {
+        pendingKeyboardClick = nil
+        closeComposer()
+    }
+
+    private func closeComposer() {
+        richEditor.resignFirstResponder()
+        editing = false
+    }
+    func cancelDraft() {
+        hideKeyboard()
+        draft = ""; target = nil; selectionID = nil; readingSelection = false; editorHint = nil
+        richEditor.attributedText = nil
+        richEditor.typingAttributes = [.font: UIFont.preferredFont(forTextStyle: .body), .foregroundColor: UIColor.label]
+    }
+    var canInsert: Bool { uiActive && live && canPoint && focus != nil && focus == target && !draft.isEmpty && draft.utf8.count <= 16384 && submitting == nil }
     var needsTarget: Bool { focus != nil && target != focus }
-    func insert() {
-        guard canInsert else { return }
+    func loadSelection() {
+        guard uiActive, supportsEditing, live, canPoint, let focus, submitting == nil else { return }
         let id = UUID()
+        readingSelection = true
         submitting = id
-        channel?.send(.init(.insert, token: target, request: id, text: draft))
+        var command = LinkedMessage(.insert, token: focus, request: id, text: "")
+        command.readSelection = true
+        channel?.send(command)
+    }
+    func insert(deleting: Bool = false) {
+        if deleting {
+            guard uiActive, let target, target == focus, selectionID != nil, submitting == nil, live, canPoint else { return }
+        } else { guard canInsert else { return } }
+        guard richEditor.markedTextRange == nil else { editorHint = "Finish composing the current word first."; return }
+        let styles = deleting ? [] : MacDraftEditor.styles(in: richEditor.attributedText)
+        guard styles.count <= 512 else { editorHint = "Too many formatting changes. Split this edit."; return }
+        guard supportsEditing || styles.isEmpty else { editorHint = "Update the Mac receiver for formatted text."; return }
+        let id = UUID()
+        var command = LinkedMessage(.insert, token: target, request: id, text: deleting ? "" : draft)
+        command.styles = styles.isEmpty ? nil : styles
+        command.selection = selectionID
+        submitting = id
+        channel?.send(command)
     }
 }

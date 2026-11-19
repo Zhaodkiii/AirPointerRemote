@@ -22,9 +22,27 @@ enum PhoneProtocol {
         let paused: Bool
     }
 
+    // Heartbeat phases understood by receivers advertising background resume.
+    enum LinkedLifecycle: UInt8 {
+        case foreground = 1, background = 2
+        static let grace: TimeInterval = 20
+    }
+
     enum Action: UInt8 {
         case heartbeat, move, leftDown, leftUp, rightClick, doubleClick
-        case scroll, stop, center, pause, resume, confirm, disconnect, linkStart, linkEnd
+        case scroll, stop, center, pause, resume, confirm, disconnect, linkStart, linkEnd, padGesture
+    }
+
+    enum PadGesture: UInt8, Codable {
+        case zoomIn = 1, zoomOut, fit, rotateLeft, rotateRight, back, forward
+        case previousSpace, nextSpace, notifications, missionControl, appWindows, apps, desktop
+
+        var isSystemAction: Bool {
+            switch self {
+            case .previousSpace, .nextSpace, .notifications, .missionControl, .appWindows, .apps, .desktop: return true
+            default: return false
+            }
+        }
     }
 
     struct Command {

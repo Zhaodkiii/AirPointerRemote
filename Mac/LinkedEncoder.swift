@@ -20,11 +20,12 @@ final class LinkedEncoder {
 
     deinit { if let encoder { VTCompressionSessionInvalidate(encoder) } }
 
-    func encode(_ sample: CMSampleBuffer, completion: @escaping (Data?) -> Void) {
+    func encode(_ sample: CMSampleBuffer, keyFrame: Bool = false, completion: @escaping (Data?) -> Void) {
         guard let encoder, let image = sample.imageBuffer else { completion(nil); return }
+        let frameProperties = keyFrame ? [kVTEncodeFrameOptionKey_ForceKeyFrame: true] as CFDictionary : nil
         let status = VTCompressionSessionEncodeFrame(encoder, imageBuffer: image,
-            presentationTimeStamp: sample.presentationTimeStamp, duration: .invalid,
-            frameProperties: nil, infoFlagsOut: nil) { error, _, encoded in
+            presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()), duration: .invalid,
+            frameProperties: frameProperties, infoFlagsOut: nil) { error, _, encoded in
                 let packet = error == noErr ? encoded.flatMap(Self.packet) : nil
                 DispatchQueue.main.async { completion(packet) }
             }

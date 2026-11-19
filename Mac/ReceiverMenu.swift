@@ -2,7 +2,9 @@ import AppKit
 import Carbon
 import CoreBluetooth
 
-final class ReceiverMenu: NSObject {
+final class ReceiverMenu: NSObject, NSMenuDelegate {
+    private var rememberItem: NSMenuItem!
+    private var forgetItem: NSMenuItem!
     private let receiver: Receiver
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let status = NSMenuItem(title: "Waiting for a device", action: nil, keyEquivalent: "")
@@ -24,6 +26,13 @@ final class ReceiverMenu: NSObject {
         menu.addItem(.separator())
         add("Open Accessibility Settings…", #selector(openAccessibility), to: menu)
         add("Open Bluetooth Settings…", #selector(openBluetooth), to: menu)
+        menu.addItem(.separator())
+        rememberItem = add("Remember Display for This iPhone", #selector(toggleRemember), to: menu)
+        forgetItem = add("Forget All Remembered Displays", #selector(forgetDisplays), to: menu)
+        menu.delegate = self
+        menu.autoenablesItems = false
+        status.isEnabled = false
+        permission.isEnabled = false
         menu.addItem(.separator())
         pauseItem = add("Pause Control", #selector(togglePause(_:)), to: menu)
         let stop = add("Stop All Control", #selector(stopControl), to: menu)
@@ -63,6 +72,31 @@ final class ReceiverMenu: NSObject {
         permission.title = (CGPreflightPostEventAccess() ? "Pointer control allowed" : "Accessibility permission required") + " · " + bluetooth
     }
 
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let host = LinkedHost.sharing
+        rememberItem.title = host.map { "Remember “\($0.displayName)” for \($0.phoneName)" } ?? "Remember Display for This iPhone (Start Sharing First)"
+        rememberItem.state = host?.remembersDisplay == true ? .on : .off
+        rememberItem.isEnabled = host?.canRememberDisplay == true
+        forgetItem.isEnabled = LinkedHost.hasRememberedDisplays
+    }
+
+    @objc private func toggleRemember() {
+        guard let host = LinkedHost.sharing, host.canRememberDisplay else { return }
+        let enable = !host.remembersDisplay
+        host.setRemembered(enable)
+        if enable && !CGPreflightScreenCaptureAccess() && !CGRequestScreenCaptureAccess() {
+            let alert = NSAlert()
+            alert.messageText = "Allow Screen Recording to reuse this display"
+            alert.informativeText = "Enable AirPointer Remote in System Settings → Privacy & Security → Screen & System Audio Recording. Reopen the Mac app if macOS asks. Until access is available, you can still choose a display each time."
+            alert.addButton(withTitle: "Open Settings")
+            alert.addButton(withTitle: "Later")
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+            }
+        }
+    }
+    @objc private func forgetDisplays() { LinkedHost.forgetAllDisplays() }
+
     @objc private func showHelp() {
         let alert = NSAlert()
         alert.messageText = "Connect an iPhone or Apple Watch"
@@ -92,6 +126,7 @@ final class ReceiverMenu: NSObject {
         status.title = "Control stopped. Resume from this menu."
     }
     @objc private func revoke() {
+        LinkedHost.forgetAllDisplays()
         receiver.revokePhones()
         status.title = "iPhone pairings revoked."
     }
