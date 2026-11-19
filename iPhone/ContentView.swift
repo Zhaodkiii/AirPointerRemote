@@ -1,0 +1,211 @@
+import SwiftUI
+
+struct ContentView: View {
+    @ObservedObject var controller: RemoteController
+    @ObservedObject var connection: PhoneConnection
+    @State private var settings = false
+    @State private var showHelp = false
+    @State private var confirmNewIdentity = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                connectionStatus
+                if connection.connected { remote } else { devices }
+            }
+            .padding()
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle("AirPointer Remote")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showHelp = true } label: { Image(systemName: "questionmark.circle") }
+                        .accessibilityLabel("How to Use")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { controller.stop(); settings = true } label: { Image(systemName: "slider.horizontal.3") }
+                        .accessibilityLabel("Settings")
+                }
+            }
+            .onChange(of: settings) { _, _ in controller.suspendInteraction(settings || showHelp) }
+            .onChange(of: showHelp) { _, _ in controller.suspendInteraction(settings || showHelp) }
+            .sheet(isPresented: $settings) { settingsView }
+            .sheet(isPresented: $showHelp) { helpView }
+            .confirmationDialog("Replace saved Mac pairing?", isPresented: $confirmNewIdentity, titleVisibility: .visible) {
+                Button("Forget and Re-pair", role: .destructive) { connection.retryChangedMac() }
+            } message: {
+                Text("Only continue if you recognize this Mac. You'll need to compare a new pairing code on both devices.")
+            }
+
+        }
+    }
+
+    private var connectionStatus: some View {
+        HStack(spacing: 12) {
+            Image(systemName: connection.connected ? "laptopcomputer" : "antenna.radiowaves.left.and.right")
+                .font(.title2)
+                .foregroundStyle(connection.connected && connection.accessibility ? .green : .orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(connection.macName).font(.headline).lineLimit(1)
+                Text(connection.status).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            if connection.connected {
+                Button { controller.togglePause() } label: {
+                    Image(systemName: controller.paused ? "play.fill" : "pause.fill")
+                        .frame(width: 40, height: 40)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(controller.paused ? "Resume Control" : "Pause Control")
+            }
+        }
+    }
+
+    private var devices: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "cursorarrow.motionlines").font(.system(size: 58)).foregroundStyle(.blue).padding(.top, 40)
+            Text("Control Your Mac Pointer").font(.title2.bold())
+            Text("Open AirPointer Remote on your Mac. Allow Bluetooth and Accessibility on the Mac, then select it below.")
+                .multilineTextAlignment(.center).foregroundStyle(.secondary)
+            if let code = connection.pairingCode {
+                VStack(spacing: 12) {
+                    Text("Compare Pairing Codes").font(.headline)
+                    Text(code).font(.largeTitle.monospacedDigit().bold())
+                    Text("If the code matches your Mac, confirm on both devices.")
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                    Button("Codes Match — Connect") { connection.confirmPairing() }
+                        .buttonStyle(.borderedProminent)
+                    Button("Cancel Pairing", role: .cancel) { connection.rejectPairing() }
+                }
+                .padding()
+            } else if connection.connecting {
+                ProgressView()
+                Button("Cancel Connection") { connection.disconnect() }
+            } else {
+                if connection.changedMac != nil {
+                    Button("Forget and Re-pair…") { confirmNewIdentity = true }
+                        .buttonStyle(.bordered)
+                }
+                ScrollView {
+                    VStack(spacing: 10) {
+                        ForEach(connection.nearby) { mac in
+                            Button { connection.connect(mac) } label: {
+                                HStack {
+                                    Image(systemName: "laptopcomputer")
+                                    Text(mac.name)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                }
+                                .padding().background(.background, in: RoundedRectangle(cornerRadius: 16))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if connection.nearby.isEmpty && connection.bluetoothReady { Text("Looking for nearby Macs…").foregroundStyle(.secondary).padding() }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            Button("Open iPhone Settings") {
+                UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
+            }.font(.footnote)
+        }
+    }
+
+    private var remote: some View {
+        VStack(spacing: 12) {
+            Picker("Control Mode", selection: $controller.mode) {
+                ForEach(RemoteController.Mode.allCases) { Text($0.rawValue).tag($0) }
+            }.pickerStyle(.segmented)
+            if let message = controller.motionMessage { Text(message).font(.caption).foregroundStyle(.orange) }
+            if controller.mode != .trackpad {
+                HStack {
+                    Button { controller.calibrate() } label: { Label("Recenter", systemImage: "scope") }
+                        .disabled(!controller.canControl)
+                    Spacer()
+                    Toggle("Continuous", isOn: $controller.continuous).fixedSize()
+                }.font(.subheadline)
+            }
+            ZStack {
+                RoundedRectangle(cornerRadius: 28).fill(Color(uiColor: .secondarySystemGroupedBackground))
+                VStack(spacing: 14) {
+                    Image(systemName: controller.mode == .air ? "gyroscope" : "hand.draw")
+                        .font(.system(size: 44, weight: .light))
+                    Text(controller.paused || connection.macPaused ? "Control is paused" : controller.mode == .air ? "Hold Move and tilt your iPhone" : "One finger to move · Two to scroll")
+                        .font(.headline)
+                    Text(controller.mode == .hybrid ? "Hold Move to aim. Release for touch control." : controller.mode == .air ? "Point the top of your iPhone at the Mac." : "Tap to click · Two-finger tap to right-click")
+                        .font(.footnote)
+                }
+                .foregroundStyle(.secondary)
+                .padding()
+                .multilineTextAlignment(.center)
+                .allowsHitTesting(false)
+                if controller.mode != .air {
+                    TrackpadView(controller: controller, enabled: controller.canControl)
+                        .clipShape(RoundedRectangle(cornerRadius: 28))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack(spacing: 10) {
+                HoldControl(title: "Left Click", enabled: controller.canControl) { controller.left($0, source: "button") }
+                if controller.mode != .trackpad {
+                    HoldControl(title: controller.airHeld ? "Moving" : "Hold to Move", enabled: controller.canControl) { controller.setAirHeld($0) }
+                }
+                Button { controller.click(right: true) } label: {
+                    Text("Right Click").font(.system(size: 16, weight: .semibold)).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+                }.buttonStyle(.plain).disabled(!controller.canControl)
+            }.frame(height: 68)
+            HStack {
+                HoldControl(title: "Hold for Precision", enabled: controller.canControl) { controller.precise = $0 }
+                Button("Disconnect") { controller.stop(); connection.disconnect() }.buttonStyle(.bordered)
+            }.frame(height: 44)
+        }
+    }
+
+    private var settingsView: some View {
+        NavigationStack {
+            Form {
+                Section("Pointer") {
+                    Text("Trackpad speed \(controller.touchSpeed, specifier: "%.1f")")
+                    Slider(value: $controller.touchSpeed, in: 0.3...4)
+                    Text("Air mouse sensitivity \(controller.airSpeed, specifier: "%.1f")")
+                    Slider(value: $controller.airSpeed, in: 0.2...3)
+                }
+                Section("Scrolling") {
+                    Toggle("Natural Scrolling", isOn: $controller.naturalScroll)
+                    Toggle("Inertial Scrolling", isOn: $controller.inertia)
+                }
+                Section("Connection") {
+                    Button("Forget Paired Mac", role: .destructive) { controller.stop(); connection.forget(); settings = false }
+                }
+            }
+            .navigationTitle("Settings")
+            .toolbar { Button("Done") { settings = false } }
+        }
+    }
+
+    private var helpView: some View {
+        NavigationStack {
+            List {
+                Section("Trackpad") {
+                    Text("Slide one finger to move the pointer. Tap to click, double-tap to double-click, or tap with two fingers to right-click.")
+                    Text("Slide two fingers to scroll. To drag, hold Left Click while moving another finger on the trackpad, or tap once and then touch and hold.")
+                }
+                Section("Air Mouse and Hybrid") {
+                    Text("Point the top of your iPhone at the Mac. Hold Move and turn or tilt your phone. Release to adjust your grip. In Hybrid mode, use the trackpad for fine adjustments.")
+                    Text("Recenter moves the pointer to the center of its display. Precision slows movement. Continuous keeps motion control active after you release Move.")
+                }
+                Section("Privacy") {
+                    Text("Pointer and motion input are sent directly over Bluetooth to the Mac you pair with. AirPointer Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu.")
+                }
+                Section("Stopping Control and Permissions") {
+                    Text("Leaving the app or locking iPhone stops control. Use the Mac menu bar to pause, revoke pairings, or quit. The emergency shortcut is Control + Option + Command + Period.")
+                    Text("If connected but the pointer does not move, open System Settings → Privacy & Security → Accessibility on the Mac and enable AirPointer Remote.")
+                }
+            }
+            .navigationTitle("How to Use")
+            .toolbar { Button("Done") { showHelp = false } }
+        }
+    }
+}

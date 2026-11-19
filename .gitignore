@@ -1,0 +1,8 @@
+.DS_Store
+DerivedData/
+*.xcarchive
+xcuserdata/
+*.xcuserstate
+
+# Local App Store submission materials and support-site checkout
+/docs/store/
