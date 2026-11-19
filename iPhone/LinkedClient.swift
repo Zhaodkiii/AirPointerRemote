@@ -34,17 +34,20 @@ final class LinkedClient: ObservableObject {
     private var browser: NWBrowser?
     private var timeout: Timer?
     private var deadline = Date()
-    private var displayName = "Mac display"
+    private(set) var displayName = "Mac display"
     private var uiActive = true
     private var pausedAt: TimeInterval?
     private var waitingForResumeFrame = false
     @Published private(set) var resuming = false
     @Published private(set) var canRetrySharing = false
 
-    func start(_ phone: PhoneConnection) {
-        guard !running, let offer = phone.beginLinkedScreen() else { return }
+    private var inlineRequest = false
+
+    func start(_ phone: PhoneConnection, inline: Bool = false, chooseDisplay: Bool = false) {
+        guard !running, let offer = phone.beginLinkedScreen(inline: inline, chooseDisplay: chooseDisplay) else { return }
         resumeMac = nil
         canRetrySharing = false
+        inlineRequest = inline
         self.phone = phone
         sessionMac = phone.connectedMacID
         running = true
@@ -226,7 +229,7 @@ final class LinkedClient: ObservableObject {
         if !phone.connected {
             interrupted("Connection to the Mac was interrupted.")
         } else if let resumeMac, phone.connectedMacID == resumeMac, !phone.macPaused, uiActive {
-            start(phone)
+            start(phone, inline: inlineRequest)
         }
     }
 

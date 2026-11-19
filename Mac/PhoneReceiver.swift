@@ -27,6 +27,7 @@ final class PhoneReceiver {
     private let identity = try? PhoneKeychain.identity()
     private let mouse = PhoneMouse()
     private var linked: LinkedHost?
+    private var allowPendingPointer = false
     private func endSharing() {
         guard let host = linked else { return }
         linked = nil
@@ -174,10 +175,12 @@ final class PhoneReceiver {
         if command.action == .linkStart {
             guard !paused, let first = UInt32(exactly: command.x), let second = UInt32(exactly: command.y) else { return }
             endSharing()
-            mouse.reset()
+            allowPendingPointer = command.phase & 1 != 0
+            if !allowPendingPointer { mouse.reset() }
             let host = LinkedHost(peer: session.peerKey.base64EncodedString(), phoneName: session.name)
             linked = host
             let offer = LinkedOffer(key: key, first: first, second: second)
+            let acceptsLinkedInput = !allowPendingPointer
             let state = onState
             DispatchQueue.main.async { [weak self, host] in
                 host.onEnd = { [weak self, weak host] in
@@ -185,13 +188,22 @@ final class PhoneReceiver {
                         if let self, self.linked === host { self.linked = nil }
                     }
                 }
+                host.acceptsLinkedInput = acceptsLinkedInput
                 host.report = state
-                host.start(offer)
+                host.start(offer, chooseDisplay: command.phase & 2 != 0)
             }
             return
         }
         if command.action == .pause || command.action == .stop { session.backgroundDeadline = nil; endSharing() }
-        if linked != nil, ![.pause, .resume, .heartbeat, .stop].contains(command.action) { return }
+        if command.action == .resetPointer { mouse.reset(); return }
+        if command.action == .linkedInput {
+            guard let host = linked, allowPendingPointer else { return }
+            allowPendingPointer = false
+            mouse.reset()
+            DispatchQueue.main.async { host.acceptsLinkedInput = true }
+            return
+        }
+        if linked != nil, !allowPendingPointer, ![.pause, .resume, .heartbeat, .stop].contains(command.action) { return }
         if command.action == .move { movementCount += 1 }
         if command.action == .pause { remotelyPaused = true; mouse.reset() }
         if command.action == .resume { remotelyPaused = false }

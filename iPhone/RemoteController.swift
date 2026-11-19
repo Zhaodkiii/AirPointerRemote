@@ -33,6 +33,7 @@ final class RemoteController: ObservableObject {
     private var airFilter = AirMotionFilter()
     private var filteredTouchSpeed = 0.0
     private var lastTouchSample: TimeInterval?
+    @Published private(set) var holdingLeft = false
     private var leftSources: Set<String> = []
     private var scrollVelocity = CGPoint.zero
     private var inertiaTimer: Timer?
@@ -53,7 +54,8 @@ final class RemoteController: ObservableObject {
     }
 
     func suspendInteraction(_ suspended: Bool) {
-        stop()
+        guard interactionSuspended != suspended else { return }
+        if suspended { stop() }
         interactionSuspended = suspended
         updateMotion()
     }
@@ -131,6 +133,7 @@ final class RemoteController: ObservableObject {
         if pressed { leftSources.insert(source) } else { leftSources.remove(source) }
         let isHeld = !leftSources.isEmpty
         if wasHeld != isHeld {
+            holdingLeft = isHeld
             connection.send(.init(isHeld ? .leftDown : .leftUp, phase: airActive ? 1 : 0))
             if isHeld { haptic() }
         }
@@ -171,7 +174,7 @@ final class RemoteController: ObservableObject {
     func stop() {
         cancelInertia()
         connection.discardMovement()
-        connection.send(.init(.stop))
+        connection.send(.init(connection.linkedRequested ? .resetPointer : .stop))
         resetLocal()
     }
 
@@ -179,6 +182,7 @@ final class RemoteController: ObservableObject {
         inertiaTimer?.invalidate()
         inertiaTimer = nil
         leftSources.removeAll()
+        if holdingLeft { holdingLeft = false }
         airHeld = false
         precise = false
         lastTouchSample = nil

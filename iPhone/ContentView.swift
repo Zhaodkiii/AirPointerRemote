@@ -3,6 +3,9 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var controller: RemoteController
     @ObservedObject var connection: PhoneConnection
+    @StateObject private var sharing = LinkedClient()
+    @Environment(\.scenePhase) private var phase
+    @State private var inlineRequested = false
     @State private var linkedScreen = false
     @State private var settings = false
     @State private var showHelp = false
@@ -18,33 +21,59 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                connectionStatus
-                if connection.connected { remote } else { devices }
+            VStack(spacing: inlineWorkspace ? 4 : 16) {
+                connectionStatus.padding(.horizontal, inlineWorkspace ? 12 : 0)
+                if inlineWorkspace {
+                    LinkedWorkspace(client: sharing, inline: true)
+                } else if connection.connected { remote } else { devices }
             }
-            .padding()
+            .padding(inlineWorkspace ? 0 : 16)
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("AirPointer Remote")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(inlineWorkspace ? .hidden : .visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showHelp = true } label: { Image(systemName: "questionmark.circle") }
                         .accessibilityLabel("How to Use")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { controller.suspendInteraction(true); linkedScreen = true } label: {
+                    Button {
+                        controller.suspendInteraction(true)
+                        if sharing.running { connection.send(.init(.linkedInput)) }
+                        sharing.hideKeyboard()
+                        linkedScreen = true
+                    } label: {
                         Image(systemName: "rectangle.connected.to.line.below")
                     }
                     .accessibilityLabel("Linked Screen")
-                    Button { controller.stop(); settings = true } label: { Image(systemName: "slider.horizontal.3") }
+                    Button { settings = true } label: { Image(systemName: "slider.horizontal.3") }
                         .accessibilityLabel("Settings")
                 }
             }
-            .fullScreenCover(isPresented: $linkedScreen, onDismiss: { controller.suspendInteraction(settings || showHelp) }) {
-                LinkedScreenView(connection: connection)
+            .fullScreenCover(isPresented: $linkedScreen, onDismiss: {
+                sharing.end()
+                inlineRequested = false
+                updateInputOwner()
+            }) {
+                LinkedScreenView(connection: connection, client: sharing)
             }
-            .onChange(of: settings) { _, _ in controller.suspendInteraction(settings || showHelp) }
-            .onChange(of: showHelp) { _, _ in controller.suspendInteraction(settings || showHelp) }
+            .onChange(of: inlineWorkspace) { _, showing in
+                updateInputOwner()
+                if showing && sharing.live { connection.send(.init(.linkedInput)) }
+            }
+            .onChange(of: sharing.live) { _, live in
+                if live && linkedScreen { connection.send(.init(.linkedInput)) }
+            }
+            .onChange(of: settings) { _, _ in updateInputOwner() }
+            .onChange(of: showHelp) { _, _ in updateInputOwner() }
+            .onChange(of: connection.connected) { _, _ in sharing.connectionChanged(connection) }
+            .onChange(of: connection.macPaused) { _, paused in
+                if paused { sharing.end("Control paused on the Mac.") }
+            }
+            .onChange(of: phase, initial: true) { _, phase in
+                sharing.sceneChanged(active: phase == .active, background: phase == .background)
+            }
             .sheet(isPresented: $settings) { settingsView }
             .sheet(isPresented: $showHelp) { helpView }
             .confirmationDialog("Replace saved Mac pairing?", isPresented: $confirmNewIdentity, titleVisibility: .visible) {
@@ -56,6 +85,24 @@ struct ContentView: View {
         }
     }
 
+    private var inlineWorkspace: Bool {
+        inlineRequested && !linkedScreen && (sharing.live || sharing.resuming) && !controller.holdingLeft
+    }
+
+    private func updateInputOwner() {
+        controller.suspendInteraction(linkedScreen || inlineWorkspace || settings || showHelp)
+    }
+
+    private func toggleInlineSharing() {
+        if sharing.running {
+            sharing.end()
+            inlineRequested = false
+        } else {
+            inlineRequested = true
+            sharing.start(connection, inline: true)
+        }
+    }
+
     private var connectionStatus: some View {
         HStack(spacing: 12) {
             Image(systemName: connection.connected ? "laptopcomputer" : "antenna.radiowaves.left.and.right")
@@ -63,11 +110,42 @@ struct ContentView: View {
                 .foregroundStyle(connection.connected && connection.accessibility ? .green : .orange)
             VStack(alignment: .leading, spacing: 4) {
                 Text(connection.macName).font(.headline).lineLimit(1)
-                Text(connection.status).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if inlineWorkspace {
+                    Button {
+                        sharing.hideKeyboard()
+                        sharing.end(keepDraft: true)
+                        sharing.start(connection, inline: true, chooseDisplay: true)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(sharing.displayName).lineLimit(1)
+                            Image(systemName: "chevron.down")
+                        }
+                    }
+                    .font(.caption)
+                    .accessibilityLabel("Change shared display")
+                } else {
+                    Text(inlineRequested && connection.connected ? sharing.status : connection.status).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 0)
             if connection.connected {
-                Button { controller.togglePause() } label: {
+                Button(action: toggleInlineSharing) {
+                    HStack(spacing: 4) {
+                        if sharing.running && !sharing.live { ProgressView().controlSize(.small) }
+                        else { Image(systemName: sharing.live ? "stop.circle.fill" : "rectangle.on.rectangle") }
+                        Text(sharing.running ? (sharing.live ? "Stop" : "Cancel") : "Share")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 32)
+                }
+                .buttonStyle(.bordered)
+                .tint(sharing.live ? .red : .accentColor)
+                .disabled(!sharing.running && (controller.paused || connection.macPaused))
+                .accessibilityLabel(sharing.running ? "Stop inline screen sharing" : "Share screen on this page")
+                Button {
+                    if sharing.running { sharing.end(); inlineRequested = false }
+                    controller.togglePause()
+                } label: {
                     Image(systemName: controller.paused ? "play.fill" : "pause.fill")
                         .frame(width: 40, height: 40)
                 }
@@ -221,6 +299,10 @@ struct ContentView: View {
                 Section("Air Mouse and Hybrid") {
                     Text("Point the top of your iPhone at the Mac. Hold Move and turn or tilt your phone. Release to adjust your grip. In Hybrid mode, use the trackpad for fine adjustments.")
                     Text("Recenter moves the pointer to the center of its display. Precision slows movement. Continuous keeps motion control active after you release Move.")
+                }
+                Section("Screen Sharing") {
+                    Text("Tap Share next to your Mac to see its desktop above the trackpad. You can keep using the pointer while choosing a display on the Mac. Tap Stop to return to your previous control mode.")
+                    Text("The display icon in the top toolbar opens the separate Linked Screen view.")
                 }
                 Section("Privacy") {
                     Text("Pointer and motion input use Bluetooth. Linked Screen uses an encrypted local network connection to the paired Mac for video, pointer input and text. AirPointer Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu.")

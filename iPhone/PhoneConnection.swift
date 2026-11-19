@@ -144,12 +144,12 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
 
     var connectedMacID: UUID? { connected ? peripheral?.identifier : nil }
 
-    func beginLinkedScreen() -> LinkedOffer? {
+    func beginLinkedScreen(inline: Bool, chooseDisplay: Bool) -> LinkedOffer? {
         guard connected, !macPaused, let sessionKey else { return nil }
         linkedRequested = true
         let first = UInt32.random(in: .min ... .max)
         let second = UInt32.random(in: .min ... .max)
-        send(.init(.linkStart, x: Double(first), y: Double(second)))
+        send(.init(.linkStart, x: Double(first), y: Double(second), phase: (inline ? 1 : 0) | (chooseDisplay ? 2 : 0)))
         return LinkedOffer(key: sessionKey, first: first, second: second)
     }
 

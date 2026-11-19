@@ -66,6 +66,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         guard let oldest = frames.first else { return false }
         return ProcessInfo.processInfo.systemUptime - oldest.started >= 0.6
     }
+    var acceptsLinkedInput = true
     private var hasPicture = false
     private var pickerActive = false
     private var displayID: CGDirectDisplayID?
@@ -86,7 +87,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private(set) var ended = false
     var report: ((String) -> Void)?
 
-    func start(_ offer: LinkedOffer) {
+    func start(_ offer: LinkedOffer, chooseDisplay: Bool = false) {
         guard !ended else { return }
         do {
             let server = try NWListener(using: offer.parameters)
@@ -96,7 +97,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
                 guard let self, !ended, channel == nil else { conn.cancel(); return }
                 let link = LinkedChannel(conn)
                 channel = link
-                link.onReady = { [weak self] in self?.chooseDisplay() }
+                link.onReady = { [weak self] in self?.chooseDisplay(forcePicker: chooseDisplay) }
                 link.onMessage = { [weak self] in self?.handle($0) }
                 link.onClose = { [weak self] reason in self?.stop(reason) }
                 link.start()
@@ -139,12 +140,12 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         observers.append((center, handle))
     }
 
-    private func chooseDisplay() {
+    private func chooseDisplay(forcePicker: Bool) {
         listener?.cancel()
         deadline = Date().addingTimeInterval(90)
         report?("Choose a display to share with your paired iPhone")
         channel?.send(.init(.waiting))
-        guard let saved = Self.remembered[peer], CGPreflightScreenCaptureAccess() else {
+        guard !forcePicker, let saved = Self.remembered[peer], CGPreflightScreenCaptureAccess() else {
             presentPicker()
             return
         }
@@ -345,7 +346,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
                 videoLog.notice("Waiting for video acknowledgement; screen-positioned actions paused")
             }
         }
-        channel?.send(.init(.alive, x: displayID != nil && access ? 1 : 0))
+        channel?.send(.init(.alive, x: displayID != nil && access && acceptsLinkedInput ? 1 : 0))
         focus.refreshInBackground { [weak self] in self?.publishFocus() }
     }
 
@@ -391,6 +392,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             setAwake(message.x == 1)
             return
         }
+        guard acceptsLinkedInput else { return }
         if message.kind == .dragEnd {
             let press = mouse.held ? leftPress : nil
             leftPress = nil

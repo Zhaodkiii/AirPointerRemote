@@ -2,28 +2,13 @@ import SwiftUI
 
 struct LinkedScreenView: View {
     @ObservedObject var connection: PhoneConnection
-    @StateObject private var client = LinkedClient()
+    @ObservedObject var client: LinkedClient
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var phase
-    @State private var direct = false
-    @State private var fullScreen = false
-    @State private var leftHeld = false
-    @State private var landscapeFraction = 0.50
-    @State private var initialFraction: Double?
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @State private var drag = false
-    @State private var reset = 0
-    @State private var confirmDelete = false
-    @State private var confirmPaste = false
-    @State private var showFieldRequired = false
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 8) {
                 if client.live {
-                    workspace.safeAreaInset(edge: .bottom, spacing: 0) {
-                        if client.editing { editor.padding(.vertical, 4) }
-                    }
+                    LinkedWorkspace(client: client, inline: false)
                 } else {
                     Spacer()
                     Image(systemName: "display").font(.system(size: 48, weight: .light))
@@ -55,44 +40,72 @@ struct LinkedScreenView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { client.end(); dismiss() } }
-                if client.live {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Toggle("Direct Touch", isOn: $direct)
-                            if !direct { Toggle("Full Screen", isOn: $fullScreen) }
-                            if direct {
-                                Toggle("Drag on Display", isOn: $drag)
-                            }
-                            Button("Fit Display") { reset += 1 }
-                            Button("Click at Pointer") { client.control(.init(.currentClick)) }.disabled(!client.canPoint)
-                            Button("Right Click at Pointer") { client.control(.init(.currentRight)) }.disabled(!client.canPoint)
-                            Toggle("Keep Mac Awake", isOn: awakeBinding)
-                            Button("Stop Sharing", role: .destructive) { client.end() }
-                        } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Sharing options")
-                    }
-                }
+            }
+        }
+    }
+
+    private var awakeBinding: Binding<Bool> {
+        Binding(get: { client.awake }, set: client.setAwake)
+    }
+}
+
+struct LinkedWorkspace: View {
+    @ObservedObject var client: LinkedClient
+    let inline: Bool
+    @Environment(\.scenePhase) private var phase
+    @State private var direct = false
+    @State private var fullScreen = false
+    @State private var leftHeld = false
+    @State private var landscapeFraction = 0.50
+    @State private var initialFraction: Double?
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var drag = false
+    @State private var reset = 0
+    @State private var confirmDelete = false
+    @State private var confirmPaste = false
+    @State private var showFieldRequired = false
+
+    var body: some View {
+        workspace.safeAreaInset(edge: .bottom, spacing: 0) {
+            if client.editing { editor.padding(.vertical, 4) }
+        }
+        .toolbar {
+            if !inline {
+                ToolbarItem(placement: .topBarTrailing) { options }
+            }
+        }
+        .onChange(of: phase) { _, phase in
+            if phase != .active {
+                releaseLeft()
+                confirmDelete = false
+                confirmPaste = false
             }
         }
         .onChange(of: client.editing) { _, _ in releaseLeft() }
         .onChange(of: direct) { _, _ in releaseLeft(); drag = false }
         .onChange(of: fullScreen) { _, _ in releaseLeft() }
         .onChange(of: client.canPoint) { _, enabled in if !enabled { releaseLeft() } }
-        .onChange(of: connection.connected) { _, _ in client.connectionChanged(connection) }
-        .onChange(of: connection.macPaused) { _, paused in if paused { client.end("Control paused on the Mac.") } }
-        .onChange(of: phase, initial: true) { _, phase in
-            if phase != .active {
-                releaseLeft()
-                confirmDelete = false
-                confirmPaste = false
-            }
-            client.sceneChanged(active: phase == .active, background: phase == .background)
-        }
         .alert("Select an editable Mac field", isPresented: $showFieldRequired) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Click a text field on the shared Mac to use the keyboard.")
         }
-        .onDisappear { releaseLeft(); client.end() }
+        .onDisappear { releaseLeft() }
+    }
+
+    private var options: some View {
+        Menu {
+            Toggle("Direct Touch", isOn: $direct)
+            if !direct { Toggle("Full Screen", isOn: $fullScreen) }
+            if direct {
+                Toggle("Drag on Display", isOn: $drag)
+            }
+            Button("Fit Display") { reset += 1 }
+            Button("Click at Pointer") { client.control(.init(.currentClick)) }.disabled(!client.canPoint)
+            Button("Right Click at Pointer") { client.control(.init(.currentRight)) }.disabled(!client.canPoint)
+            Toggle("Keep Mac Awake", isOn: awakeBinding)
+            Button("Stop Sharing", role: .destructive) { client.end() }
+        } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Sharing options")
     }
 
     private var workspace: some View {
@@ -110,9 +123,16 @@ struct LinkedScreenView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: direct || fullScreen ? nil : previewHeight)
                     .frame(maxHeight: direct || fullScreen ? .infinity : nil)
+                    .overlay {
+                        if client.resuming {
+                            Label("Restoring display…", systemImage: "arrow.clockwise")
+                                .padding(8).background(.regularMaterial, in: Capsule())
+                        }
+                    }
                 VStack(spacing: 0) {
                     if !client.editing {
                         HStack {
+                            if inline { options.frame(width: 44, height: 44) }
                             if !client.canPoint {
                                 Text("View only").font(.caption).foregroundStyle(.secondary)
                             }

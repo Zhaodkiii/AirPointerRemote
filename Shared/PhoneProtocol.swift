@@ -31,6 +31,7 @@ enum PhoneProtocol {
     enum Action: UInt8 {
         case heartbeat, move, leftDown, leftUp, rightClick, doubleClick
         case scroll, stop, center, pause, resume, confirm, disconnect, linkStart, linkEnd, padGesture
+        case resetPointer, linkedInput
     }
 
     enum PadGesture: UInt8, Codable {
