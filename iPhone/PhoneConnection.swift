@@ -105,7 +105,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         disconnect()
     }
 
-    func setForeground(_ active: Bool) {
+    func setForeground(_ active: Bool, viewing: Bool = false) {
         foreground = active
         if active {
             if linkedParked {
@@ -118,7 +118,8 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
             central.stopScan()
             if linkedRequested && linkedCanSuspend && connected {
                 linkedParked = true
-                send(.init(.heartbeat, phase: PhoneProtocol.LinkedLifecycle.background.rawValue))
+                let phase: PhoneProtocol.LinkedLifecycle = viewing ? .viewing : .background
+                send(.init(.heartbeat, phase: phase.rawValue))
             } else {
                 disconnect(reconnect: shouldReconnect)
             }

@@ -3,6 +3,7 @@ import Foundation
 
 /// One AVCC access unit per packet. SPS/PPS travel with the frame so the receiver can initialize immediately.
 final class LinkedEncoder {
+    static let desktopBitRate = 3_000_000
     private var encoder: VTCompressionSession?
     init?(width: Int, height: Int) {
         guard VTCompressionSessionCreate(allocator: nil, width: Int32(width), height: Int32(height),
@@ -12,10 +13,15 @@ final class LinkedEncoder {
         VTSessionSetProperties(encoder, propertyDictionary: [
             kVTCompressionPropertyKey_RealTime: true,
             kVTCompressionPropertyKey_AllowFrameReordering: false,
-            kVTCompressionPropertyKey_AverageBitRate: 3_000_000,
+            kVTCompressionPropertyKey_AverageBitRate: Self.desktopBitRate,
             kVTCompressionPropertyKey_MaxKeyFrameInterval: 30,
             kVTCompressionPropertyKey_ExpectedFrameRate: 30
         ] as CFDictionary)
+    }
+
+    func setBitRate(_ bitRate: Int) {
+        guard let encoder else { return }
+        VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_AverageBitRate, value: NSNumber(value: bitRate))
     }
 
     deinit { if let encoder { VTCompressionSessionInvalidate(encoder) } }

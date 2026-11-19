@@ -8,7 +8,9 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
     private let receiver: Receiver
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let status = NSMenuItem(title: "Waiting for a device", action: nil, keyEquivalent: "")
-    private let permission = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let accessibilityItem = NSMenuItem(title: "", action: #selector(openAccessibility), keyEquivalent: "")
+    private let screenRecordingItem = NSMenuItem(title: "", action: #selector(openScreenRecording), keyEquivalent: "")
+    private let bluetoothItem = NSMenuItem(title: "", action: #selector(openBluetooth), keyEquivalent: "")
     private var paused = false
     private var pauseItem: NSMenuItem?
     private var timer: Timer?
@@ -18,21 +20,21 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
     init(receiver: Receiver) {
         self.receiver = receiver
         super.init()
-        item.button?.image = NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "AirPointer Remote")
         let menu = NSMenu()
         menu.addItem(status)
-        menu.addItem(permission)
-        add("Connection Help…", #selector(showHelp), to: menu)
         menu.addItem(.separator())
-        add("Open Accessibility Settings…", #selector(openAccessibility), to: menu)
-        add("Open Bluetooth Settings…", #selector(openBluetooth), to: menu)
+        for permissionItem in [accessibilityItem, screenRecordingItem, bluetoothItem] {
+            permissionItem.target = self
+            menu.addItem(permissionItem)
+        }
+        add("Show Running App in Finder", #selector(revealRunningApp), to: menu)
+        add("Connection Help…", #selector(showHelp), to: menu)
         menu.addItem(.separator())
         rememberItem = add("Remember Display for This iPhone", #selector(toggleRemember), to: menu)
         forgetItem = add("Forget All Remembered Displays", #selector(forgetDisplays), to: menu)
         menu.delegate = self
         menu.autoenablesItems = false
         status.isEnabled = false
-        permission.isEnabled = false
         menu.addItem(.separator())
         pauseItem = add("Pause Control", #selector(togglePause(_:)), to: menu)
         let stop = add("Stop All Control", #selector(stopControl), to: menu)
@@ -68,11 +70,29 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
     }
 
     private func refresh() {
-        let bluetooth = CBPeripheralManager.authorization == .allowedAlways ? "Bluetooth allowed" : "Bluetooth access required"
-        permission.title = (CGPreflightPostEventAccess() ? "Pointer control allowed" : "Accessibility permission required") + " · " + bluetooth
+        let accessibility = CGPreflightPostEventAccess()
+        let screenRecording = CGPreflightScreenCaptureAccess()
+        let bluetooth = CBPeripheralManager.authorization == .allowedAlways
+        accessibilityItem.title = accessibility ? "Accessibility: Pointer Control Allowed" : "Allow Pointer Control in Accessibility…"
+        screenRecordingItem.title = screenRecording ? "Screen Recording: Access Allowed" : "Allow Screen Recording for Remembered Displays…"
+        bluetoothItem.title = bluetooth ? "Bluetooth: Access Allowed" : "Allow Bluetooth Access…"
+        accessibilityItem.isEnabled = !accessibility
+        screenRecordingItem.isEnabled = !screenRecording
+        bluetoothItem.isEnabled = !bluetooth
+
+        var missing: [String] = []
+        if !accessibility { missing.append("Accessibility") }
+        if !bluetooth { missing.append("Bluetooth") }
+        if !screenRecording && LinkedHost.hasRememberedDisplays { missing.append("Screen Recording") }
+        let description = missing.isEmpty ? "AirPointer Remote" : "AirPointer Remote — Allow " + missing.joined(separator: ", ")
+        item.button?.image = NSImage(systemSymbolName: missing.isEmpty ? "cursorarrow.rays" : "exclamationmark.circle",
+                                     accessibilityDescription: description)
+        item.button?.setAccessibilityLabel(description)
+        item.button?.toolTip = description
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        refresh()
         let host = LinkedHost.sharing
         rememberItem.title = host.map { "Remember “\($0.displayName)” for \($0.phoneName)" } ?? "Remember Display for This iPhone (Start Sharing First)"
         rememberItem.state = host?.remembersDisplay == true ? .on : .off
@@ -84,15 +104,8 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
         guard let host = LinkedHost.sharing, host.canRememberDisplay else { return }
         let enable = !host.remembersDisplay
         host.setRemembered(enable)
-        if enable && !CGPreflightScreenCaptureAccess() && !CGRequestScreenCaptureAccess() {
-            let alert = NSAlert()
-            alert.messageText = "Allow Screen Recording to reuse this display"
-            alert.informativeText = "Enable AirPointer Remote in System Settings → Privacy & Security → Screen & System Audio Recording. Reopen the Mac app if macOS asks. Until access is available, you can still choose a display each time."
-            alert.addButton(withTitle: "Open Settings")
-            alert.addButton(withTitle: "Later")
-            if alert.runModal() == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
-            }
+        if enable && !CGPreflightScreenCaptureAccess() {
+            openScreenRecording()
         }
     }
     @objc private func forgetDisplays() { LinkedHost.forgetAllDisplays() }
@@ -108,8 +121,49 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
     }
 
     @objc private func openAccessibility() {
-        _ = CGRequestPostEventAccess()
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        showPermissionGuide(
+            title: "Allow pointer control on this Mac",
+            pane: "Accessibility",
+            details: "Enable AirPointer Remote to move, click, and drag the pointer from your iPhone or Apple Watch.",
+            settings: "Privacy_Accessibility"
+        )
+    }
+
+    @objc private func openScreenRecording() {
+        showPermissionGuide(
+            title: "Allow Screen Recording for remembered displays",
+            pane: "Screen & System Audio Recording",
+            details: "This lets a paired iPhone reuse a display you remembered. You can also choose a screen for an individual sharing session with the system picker.",
+            settings: "Privacy_ScreenCapture"
+        )
+    }
+
+    private func showPermissionGuide(title: String, pane: String, details: String, settings: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = """
+            \(details)
+
+            Open System Settings → Privacy & Security → \(pane). If the switch is already on for another copy, use the − and + buttons to replace that entry with the running app, then reopen it.
+
+            Running app: \(Bundle.main.bundleURL.path)
+            """
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Show App in Finder")
+        alert.addButton(withTitle: "Later")
+        NSApp.activate(ignoringOtherApps: true)
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(settings)")!)
+        case .alertSecondButtonReturn:
+            revealRunningApp()
+        default:
+            break
+        }
+    }
+
+    @objc private func revealRunningApp() {
+        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
     }
     @objc private func openBluetooth() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth")!)

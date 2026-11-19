@@ -3,12 +3,14 @@ import SwiftUI
 struct LinkedScreenView: View {
     @ObservedObject var connection: PhoneConnection
     @ObservedObject var client: LinkedClient
+    let startPiP: () -> Void
+    @Binding var automaticPiP: Bool
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             VStack(spacing: 8) {
                 if client.live {
-                    LinkedWorkspace(client: client, inline: false)
+                    LinkedWorkspace(client: client, inline: false, startPiP: startPiP, automaticPiP: $automaticPiP)
                 } else {
                     Spacer()
                     Image(systemName: "display").font(.system(size: 48, weight: .light))
@@ -40,6 +42,11 @@ struct LinkedScreenView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { client.end(); dismiss() } }
+                if client.pipState == .active {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Return to Shared Screen", systemImage: "pip.exit") { client.pictureInPicture?.restore() }
+                    }
+                }
             }
         }
     }
@@ -52,15 +59,20 @@ struct LinkedScreenView: View {
 struct LinkedWorkspace: View {
     @ObservedObject var client: LinkedClient
     let inline: Bool
+    let startPiP: () -> Void
+    @Binding var automaticPiP: Bool
     @Environment(\.scenePhase) private var phase
-    @State private var direct = false
-    @State private var fullScreen = false
+    private var direct: Bool { client.directTouch }
+    private var fullScreen: Bool { client.fullScreen }
     @State private var leftHeld = false
-    @State private var landscapeFraction = 0.50
+    private var landscapeFraction: Double { client.previewFraction }
     @State private var initialFraction: Double?
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var drag = false
-    @State private var reset = 0
+    @State private var zoomRequest: LinkedCanvas.ZoomRequest?
+    @State private var hideFullScreenTools = false
+    @AppStorage("linked.previewHintSeen") private var previewHintSeen = false
+    @State private var showPreviewHint = false
     @State private var confirmDelete = false
     @State private var confirmPaste = false
     @State private var showFieldRequired = false
@@ -82,8 +94,26 @@ struct LinkedWorkspace: View {
             }
         }
         .onChange(of: client.editing) { _, _ in releaseLeft() }
-        .onChange(of: direct) { _, _ in releaseLeft(); drag = false }
-        .onChange(of: fullScreen) { _, _ in releaseLeft() }
+        .onChange(of: direct) { _, _ in
+            releaseLeft()
+            drag = false
+            hideFullScreenTools = false
+        }
+        .onChange(of: fullScreen) { _, _ in
+            releaseLeft()
+            hideFullScreenTools = false
+            showPreviewHint = false
+        }
+        .onChange(of: client.previewZoomed) { _, zoomed in
+            if zoomed { showPreviewHint = false }
+        }
+        .task {
+            guard !previewHintSeen, !direct, !fullScreen, !client.editing else { return }
+            showPreviewHint = true
+            previewHintSeen = true
+            try? await Task.sleep(for: .seconds(4))
+            showPreviewHint = false
+        }
         .onChange(of: client.canPoint) { _, enabled in if !enabled { releaseLeft() } }
         .alert("Select an editable Mac field", isPresented: $showFieldRequired) {
             Button("OK", role: .cancel) {}
@@ -95,12 +125,27 @@ struct LinkedWorkspace: View {
 
     private var options: some View {
         Menu {
-            Toggle("Direct Touch", isOn: $direct)
-            if !direct { Toggle("Full Screen", isOn: $fullScreen) }
+            Toggle("Direct Touch", isOn: $client.directTouch)
+            if !direct {
+                Button(fullScreen ? "Show Trackpad" : "Full Screen") { client.fullScreen.toggle() }
+            }
             if direct {
                 Toggle("Drag on Display", isOn: $drag)
             }
-            Button("Fit Display") { reset += 1 }
+            if client.pipSupportedByMac && client.pictureInPicture != nil {
+                Button("Picture in Picture", systemImage: "pip.enter", action: startPiP)
+                    .disabled(!client.pipPossible || client.pipState != .idle)
+                Toggle("Start PiP on Home", isOn: $automaticPiP)
+            } else if !client.pipSupportedByMac && client.pictureInPicture != nil {
+                Text("Update AirPointer on your Mac for Picture in Picture.")
+            }
+            Button("Zoom In", systemImage: "plus.magnifyingglass") {
+                zoomRequest = .init(factor: 1.5)
+            }
+            Button("Zoom Out", systemImage: "minus.magnifyingglass") {
+                zoomRequest = .init(factor: 1 / 1.5)
+            }.disabled(!client.previewZoomed)
+            Button("Fit Display") { fitPreview() }.disabled(!client.previewZoomed)
             Button("Click at Pointer") { client.control(.init(.currentClick)) }.disabled(!client.canPoint)
             Button("Right Click at Pointer") { client.control(.init(.currentRight)) }.disabled(!client.canPoint)
             Toggle("Keep Mac Awake", isOn: awakeBinding)
@@ -117,12 +162,32 @@ struct LinkedWorkspace: View {
             let previewHeight = client.editing
                 ? min(fitHeight, desiredHeight + 44, max(0, height - 64))
                 : min(desiredHeight, max(height * 0.55, height - 160))
+            let hideTools = fullScreen && !direct && hideFullScreenTools && !client.editing
             VStack(spacing: 0) {
                 LinkedCanvas(client: client, surface: direct ? .direct : .display,
-                             drag: drag, reset: reset)
+                             drag: drag, zoomRequest: zoomRequest,
+                             onPreviewTap: fullScreen && !client.editing ? { hideFullScreenTools.toggle() } : nil)
                     .frame(maxWidth: .infinity)
                     .frame(height: direct || fullScreen ? nil : previewHeight)
                     .frame(maxHeight: direct || fullScreen ? .infinity : nil)
+                    .overlay(alignment: .bottom) {
+                        if showPreviewHint && !direct && !fullScreen && !client.editing && !client.resuming {
+                            Text("Pinch to zoom")
+                                .font(.caption)
+                                .padding(8)
+                                .background(.regularMaterial, in: Capsule())
+                                .padding(8)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        if hideTools {
+                            screenLayoutButton
+                                .padding(.horizontal, 12)
+                                .background(.regularMaterial, in: Capsule())
+                                .padding(8)
+                        }
+                    }
                     .overlay {
                         if client.resuming {
                             Label("Restoring display…", systemImage: "arrow.clockwise")
@@ -130,9 +195,14 @@ struct LinkedWorkspace: View {
                         }
                     }
                 VStack(spacing: 0) {
-                    if !client.editing {
-                        HStack {
+                    if !client.editing && !hideTools {
+                        HStack(spacing: 8) {
                             if inline { options.frame(width: 44, height: 44) }
+                            if client.previewZoomed {
+                                Button("Fit", action: fitPreview)
+                                    .frame(minWidth: 44, minHeight: 44)
+                                    .accessibilityLabel("Fit Display")
+                            }
                             if !client.canPoint {
                                 Text("View only").font(.caption).foregroundStyle(.secondary)
                             }
@@ -144,19 +214,21 @@ struct LinkedWorkspace: View {
                                         .onChanged { value in
                                             let start = initialFraction ?? landscapeFraction
                                             initialFraction = start
-                                            landscapeFraction = min(0.70, max(0.25, start + value.translation.height / max(1, height)))
+                                            client.previewFraction = min(0.70, max(0.25, start + value.translation.height / max(1, height)))
                                         }.onEnded { _ in initialFraction = nil })
                                     .accessibilityLabel("Display height")
                                     .accessibilityAdjustableAction { direction in
-                                        landscapeFraction = min(0.70, max(0.25, landscapeFraction + (direction == .increment ? 0.05 : -0.05)))
+                                        client.previewFraction = min(0.70, max(0.25, landscapeFraction + (direction == .increment ? 0.05 : -0.05)))
                                     }
                                 Spacer()
                             }
-                            if !direct {
-                                Button { fullScreen.toggle() } label: {
-                                    Image(systemName: fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                                        .frame(width: 44, height: 44)
-                                }.accessibilityLabel(fullScreen ? "Exit Full Screen" : "Full Screen")
+                            if !direct { screenLayoutButton }
+                            if client.pipSupportedByMac && client.pictureInPicture != nil {
+                                Button(action: startPiP) {
+                                    Image(systemName: "pip.enter").frame(width: 44, height: 44)
+                                }
+                                .accessibilityLabel("Picture in Picture")
+                                .disabled(!client.pipPossible || client.pipState != .idle)
                             }
                             Button {
                                 if client.focus != nil { client.openKeyboard() }
@@ -168,7 +240,7 @@ struct LinkedWorkspace: View {
                     }
                     if !fullScreen && !direct {
                         ZStack {
-                            LinkedCanvas(client: client, surface: .trackpad, drag: false, reset: 0)
+                            LinkedCanvas(client: client, surface: .trackpad, drag: false)
                             Text("Slide to move · Two fingers to scroll")
                                 .font(.footnote).foregroundStyle(.secondary).allowsHitTesting(false)
                         }
@@ -195,6 +267,23 @@ struct LinkedWorkspace: View {
                 }
             }
         }
+    }
+
+    private var screenLayoutButton: some View {
+        Button {
+            client.fullScreen.toggle()
+        } label: {
+            Label(fullScreen ? "Show Trackpad" : "Full Screen",
+                  systemImage: fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                .font(.subheadline.weight(.medium))
+                .frame(minHeight: 44)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func fitPreview() {
+        zoomRequest = nil
+        client.fitPreview()
     }
 
     private func releaseLeft(userClick: Bool = false) {

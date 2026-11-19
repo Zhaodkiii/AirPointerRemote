@@ -35,7 +35,7 @@ struct LinkedOffer {
 
 struct LinkedMessage: Codable {
     enum Kind: String, Codable {
-        case alive, waiting, ready, focus, insert, inserted, rejected, stop, frameAck, keepAwake
+        case viewing, alive, waiting, ready, focus, insert, inserted, rejected, stop, frameAck, keepAwake
         case click, doubleClick, rightClick, dragStart, dragMove, dragEnd, relative, scroll
         case currentClick, currentRight, currentDouble, currentDown, gesture
     }
@@ -54,6 +54,7 @@ struct LinkedMessage: Codable {
     var supportsGestures: Bool?
     var padGesture: PhoneProtocol.PadGesture?
     var backgroundResume: Bool?
+    var pictureInPicture: Bool?
     var kind: Kind
     var x: Double = 0
     var y: Double = 0
@@ -65,7 +66,7 @@ struct LinkedMessage: Codable {
     }
 }
 
-/// Each connection is used for a single authenticated sharing request, on the main queue.
+/// Each connection is confined to its caller’s serial queue.
 final class LinkedChannel {
     let connection: NWConnection
     var onReady: (() -> Void)?
@@ -76,7 +77,7 @@ final class LinkedChannel {
     private static let limit = 4 * 1024 * 1024
 
     init(_ connection: NWConnection) { self.connection = connection }
-    func start() {
+    func start(queue: DispatchQueue = .main) {
         connection.stateUpdateHandler = { [weak self] state in
             guard let self, !closed else { return }
             switch state {
@@ -86,7 +87,7 @@ final class LinkedChannel {
             default: break
             }
         }
-        connection.start(queue: .main)
+        connection.start(queue: queue)
     }
 
     func send(_ message: LinkedMessage) {

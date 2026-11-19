@@ -1,12 +1,68 @@
 import AVFoundation
 import SwiftUI
 
+/// Stores the visible center in display coordinates so it survives viewport resizing.
+struct LinkedViewport {
+    private(set) var zoom: CGFloat = 1
+    private var center = CGPoint(x: 0.5, y: 0.5)
+
+    func rect(in bounds: CGRect, display: CGSize) -> CGRect {
+        let scale = min(bounds.width / display.width, bounds.height / display.height) * zoom
+        let width = display.width * scale
+        let height = display.height * scale
+        let maxX = max(0, (width - bounds.width) / 2)
+        let maxY = max(0, (height - bounds.height) / 2)
+        let x = min(maxX, max(-maxX, (0.5 - center.x) * width))
+        let y = min(maxY, max(-maxY, (0.5 - center.y) * height))
+        return CGRect(x: bounds.midX - width / 2 + x, y: bounds.midY - height / 2 + y,
+                      width: width, height: height)
+    }
+
+    mutating func scale(to requested: CGFloat, at anchor: CGPoint, in bounds: CGRect, display: CGSize) {
+        let previous = rect(in: bounds, display: display)
+        let next = min(5, max(1, requested))
+        guard previous.width > 0, previous.height > 0, next != zoom else { return }
+        if next == 1 {
+            self = LinkedViewport()
+            return
+        }
+        let ratio = next / zoom
+        zoom = next
+        let width = previous.width * ratio
+        let height = previous.height * ratio
+        let x = anchor.x + (previous.minX - anchor.x) * ratio
+        let y = anchor.y + (previous.minY - anchor.y) * ratio
+        setCenter(x: (bounds.midX - x) / width, y: (bounds.midY - y) / height,
+                  width: width, height: height, bounds: bounds)
+    }
+
+    mutating func pan(by delta: CGPoint, in bounds: CGRect, display: CGSize) {
+        let visible = rect(in: bounds, display: display)
+        guard zoom > 1, visible.width > 0, visible.height > 0 else { return }
+        setCenter(x: (bounds.midX - visible.minX - delta.x) / visible.width,
+                  y: (bounds.midY - visible.minY - delta.y) / visible.height,
+                  width: visible.width, height: visible.height, bounds: bounds)
+    }
+
+    private mutating func setCenter(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, bounds: CGRect) {
+        let insetX = min(0.5, bounds.width / (2 * width))
+        let insetY = min(0.5, bounds.height / (2 * height))
+        center = CGPoint(x: min(1 - insetX, max(insetX, x)), y: min(1 - insetY, max(insetY, y)))
+    }
+}
+
 struct LinkedCanvas: UIViewRepresentable {
     let client: LinkedClient
     enum Surface { case display, direct, trackpad }
     let surface: Surface
     let drag: Bool
-    let reset: Int
+    var zoomRequest: ZoomRequest? = nil
+    var onPreviewTap: (() -> Void)? = nil
+
+    struct ZoomRequest: Equatable {
+        let id = UUID()
+        let factor: CGFloat
+    }
 
     func makeUIView(context: Context) -> Canvas {
         let view = Canvas()
@@ -20,12 +76,13 @@ struct LinkedCanvas: UIViewRepresentable {
         return view
     }
     func updateUIView(_ view: Canvas, context: Context) {
-        if view.drag != drag || view.surface != surface {
+        if view.drag != drag || view.surface != surface || !client.canPoint || !client.sceneIsActive {
             view.endDrag()
         }
         view.surface = surface
         view.drag = drag
-        if view.reset != reset { view.zoom = 1; view.offset = .zero; view.reset = reset }
+        view.onPreviewTap = onPreviewTap
+        view.zoomRequest = zoomRequest
         view.setNeedsLayout()
     }
 
@@ -35,10 +92,15 @@ struct LinkedCanvas: UIViewRepresentable {
         override var editingInteractionConfiguration: UIEditingInteractionConfiguration { .none }
         weak var client: LinkedClient?
         var surface = Surface.display
-        var drag = false, reset = 0
-        var zoom = CGFloat(1), offset = CGPoint.zero
+        var drag = false
+        var onPreviewTap: (() -> Void)?
+        var zoomRequest: ZoomRequest?
+        private var appliedZoomRequest: UUID?
         private var dragging = false
-        private var rect = CGRect.zero
+        private var rect: CGRect {
+            guard let client else { return .zero }
+            return client.viewport.rect(in: bounds, display: client.size)
+        }
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -85,6 +147,9 @@ struct LinkedCanvas: UIViewRepresentable {
                 if pan.minimumNumberOfTouches == 2 { return surface != .trackpad }
                 return surface != .display
             }
+            if let tap = gesture as? UITapGestureRecognizer, surface == .display {
+                return tap.numberOfTapsRequired == 2 || (tap.numberOfTouchesRequired == 1 && onPreviewTap != nil)
+            }
             return surface != .display
         }
 
@@ -93,17 +158,25 @@ struct LinkedCanvas: UIViewRepresentable {
                 || (gesture is UIPanGestureRecognizer && other is UIPinchGestureRecognizer))
         }
 
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil, surface != .trackpad, let client else { return }
+            client.pictureInPicture?.sourceVisible(self)
+        }
+
         override func layoutSubviews() {
             super.layoutSubviews()
             guard surface != .trackpad, let client, bounds.width > 0, bounds.height > 0 else { return }
-            let factor = min(bounds.width / client.size.width, bounds.height / client.size.height) * zoom
-            let w = client.size.width * factor, h = client.size.height * factor
-            let maxX = max(0, (w-bounds.width)/2), maxY = max(0, (h-bounds.height)/2)
-            offset.x = min(maxX, max(-maxX, offset.x)); offset.y = min(maxY, max(-maxY, offset.y))
-            rect = CGRect(x: bounds.midX-w/2+offset.x, y: bounds.midY-h/2+offset.y, width: w, height: h)
+            if let request = zoomRequest, request.id != appliedZoomRequest {
+                appliedZoomRequest = request.id
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, window != nil, zoomRequest?.id == request.id else { return }
+                    scale(to: client.viewport.zoom * request.factor, at: CGPoint(x: bounds.midX, y: bounds.midY))
+                }
+            }
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            client.video.frame = rect
+            if client.video.superlayer === layer { client.video.frame = rect }
             CATransaction.commit()
         }
 
@@ -114,7 +187,14 @@ struct LinkedCanvas: UIViewRepresentable {
         }
         @objc private func tapped(_ g: UITapGestureRecognizer) {
             let twice = g.numberOfTapsRequired == 2
-            guard surface != .display else { return }
+            if surface == .display {
+                if twice, let client, rect.contains(g.location(in: self)) {
+                    scale(to: client.viewport.zoom > 1 ? 1 : 2, at: g.location(in: self))
+                } else if !twice {
+                    onPreviewTap?()
+                }
+                return
+            }
             if surface == .direct { send(twice ? .doubleClick : .click, at: g.location(in: self)) }
             else { client?.control(.init(twice ? .currentDouble : .currentClick)) }
         }
@@ -125,7 +205,7 @@ struct LinkedCanvas: UIViewRepresentable {
             guard surface == .direct, g.state == .began, !drag else { return }
             send(.rightClick, at: g.location(in: self))
         }
-        func endDrag() { if dragging { client?.control(.init(.dragEnd)); dragging = false } }
+        func endDrag() { if dragging { client?.releaseLinkedButton(); dragging = false } }
         @objc private func pan(_ g: UIPanGestureRecognizer) {
             guard surface != .display else { return }
             let p = g.location(in: self), delta = g.translation(in: self)
@@ -153,17 +233,20 @@ struct LinkedCanvas: UIViewRepresentable {
         @objc private func twoFingers(_ g: UIPanGestureRecognizer) {
             let delta = g.translation(in: self)
             g.setTranslation(.zero, in: self)
-            if surface != .trackpad { offset.x += delta.x; offset.y += delta.y; setNeedsLayout() }
-            else { client?.control(.init(.scroll, x: delta.x, y: delta.y)) }
+            guard surface != .trackpad, let client else { return }
+            client.updateViewport { $0.pan(by: delta, in: bounds, display: client.size) }
+            setNeedsLayout()
         }
+
         @objc private func pinch(_ g: UIPinchGestureRecognizer) {
-            guard surface != .trackpad else { return }
-            let old = zoom
-            zoom = min(5, max(1, zoom * g.scale))
-            let p = g.location(in: self), ratio = zoom / old
-            offset.x = (offset.x + bounds.midX - p.x) * ratio + p.x - bounds.midX
-            offset.y = (offset.y + bounds.midY - p.y) * ratio + p.y - bounds.midY
+            guard surface != .trackpad, let client else { return }
+            scale(to: client.viewport.zoom * g.scale, at: g.location(in: self))
             g.scale = 1
+        }
+
+        private func scale(to zoom: CGFloat, at point: CGPoint) {
+            guard let client else { return }
+            client.updateViewport { $0.scale(to: zoom, at: point, in: bounds, display: client.size) }
             setNeedsLayout()
         }
     }

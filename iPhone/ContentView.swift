@@ -1,4 +1,6 @@
+import CoreTransferable
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @ObservedObject var controller: RemoteController
@@ -7,6 +9,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var phase
     @State private var inlineRequested = false
     @State private var linkedScreen = false
+    @AppStorage("linked.autoPictureInPicture") private var automaticPiP = true
     @State private var settings = false
     @State private var showHelp = false
     @State private var confirmNewIdentity = false
@@ -22,9 +25,13 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: inlineWorkspace ? 4 : 16) {
+                if sharing.pipState == .active && !linkedScreen {
+                    Button("Return to Shared Screen") { sharing.pictureInPicture?.restore() }
+                    Button("Stop Sharing", role: .destructive) { sharing.end() }
+                }
                 connectionStatus.padding(.horizontal, inlineWorkspace ? 12 : 0)
                 if inlineWorkspace {
-                    LinkedWorkspace(client: sharing, inline: true)
+                    LinkedWorkspace(client: sharing, inline: true, startPiP: startPiP, automaticPiP: $automaticPiP)
                 } else if connection.connected { remote } else { devices }
             }
             .padding(inlineWorkspace ? 0 : 16)
@@ -39,6 +46,7 @@ struct ContentView: View {
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
+                        if sharing.pipState == .active { sharing.pictureInPicture?.restore(); return }
                         controller.suspendInteraction(true)
                         if sharing.running { connection.send(.init(.linkedInput)) }
                         sharing.hideKeyboard()
@@ -52,27 +60,56 @@ struct ContentView: View {
                 }
             }
             .fullScreenCover(isPresented: $linkedScreen, onDismiss: {
-                sharing.end()
-                inlineRequested = false
-                updateInputOwner()
+                if sharing.pipState == .idle && !sharing.running { inlineRequested = false }
+                updateSharingPresentation()
             }) {
-                LinkedScreenView(connection: connection, client: sharing)
+                LinkedScreenView(connection: connection, client: sharing, startPiP: startPiP, automaticPiP: $automaticPiP)
+            }
+            .onAppear {
+                let cover = $linkedScreen
+                let inline = $inlineRequested
+                let preferences = $settings
+                let help = $showHelp
+                sharing.minimizeForPictureInPicture = {
+                    inline.wrappedValue = false
+                    cover.wrappedValue = false
+                }
+                sharing.showPictureInPictureWorkspace = { workspace in
+                    preferences.wrappedValue = false
+                    help.wrappedValue = false
+                    inline.wrappedValue = workspace == .inline
+                    cover.wrappedValue = workspace == .linkedScreen
+                }
+                updateSharingPresentation()
+            }
+            .onChange(of: linkedScreen) { _, _ in updateSharingPresentation() }
+            .onChange(of: sharing.pipState) { _, _ in updateSharingPresentation() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in
+                if sharing.pipState != .idle { sharing.end("Sharing stopped when iPhone locked.", keepDraft: true) }
+            }
+            .onChange(of: sharing.pipSupportedByMac) { _, _ in updateSharingPresentation() }
+            .onChange(of: automaticPiP) { _, _ in updateSharingPresentation() }
+            .alert("Picture in Picture couldn’t start", isPresented: $sharing.pipError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Your desktop is still shared. Try Picture in Picture again.")
             }
             .onChange(of: inlineWorkspace) { _, showing in
-                updateInputOwner()
+                updateSharingPresentation()
                 if showing && sharing.live { connection.send(.init(.linkedInput)) }
             }
             .onChange(of: sharing.live) { _, live in
+                updateSharingPresentation()
                 if live && linkedScreen { connection.send(.init(.linkedInput)) }
             }
-            .onChange(of: settings) { _, _ in updateInputOwner() }
-            .onChange(of: showHelp) { _, _ in updateInputOwner() }
+            .onChange(of: settings) { _, _ in updateSharingPresentation() }
+            .onChange(of: showHelp) { _, _ in updateSharingPresentation() }
             .onChange(of: connection.connected) { _, _ in sharing.connectionChanged(connection) }
             .onChange(of: connection.macPaused) { _, paused in
                 if paused { sharing.end("Control paused on the Mac.") }
             }
             .onChange(of: phase, initial: true) { _, phase in
-                sharing.sceneChanged(active: phase == .active, background: phase == .background)
+                sharing.sceneChanged(active: phase == .active, background: phase == .background, controller: controller)
             }
             .sheet(isPresented: $settings) { settingsView }
             .sheet(isPresented: $showHelp) { helpView }
@@ -86,11 +123,28 @@ struct ContentView: View {
     }
 
     private var inlineWorkspace: Bool {
-        inlineRequested && !linkedScreen && (sharing.live || sharing.resuming) && !controller.holdingLeft
+        inlineRequested && sharing.pipState != .active && !linkedScreen && (sharing.live || sharing.resuming) && !controller.holdingLeft
     }
 
     private func updateInputOwner() {
-        controller.suspendInteraction(linkedScreen || inlineWorkspace || settings || showHelp)
+        controller.suspendInteraction(linkedScreen || inlineWorkspace || sharing.pipState != .idle || settings || showHelp)
+    }
+
+    private func updateSharingPresentation() {
+        updateInputOwner()
+        if linkedScreen {
+            sharing.workspace = .linkedScreen
+        } else if inlineWorkspace && !settings && !showHelp {
+            sharing.workspace = .inline
+        } else {
+            sharing.workspace = nil
+        }
+        sharing.pictureInPicture?.configure(automatic: automaticPiP,
+            available: sharing.live && sharing.pipSupportedByMac && sharing.workspacePresented)
+    }
+
+    private func startPiP() {
+        sharing.pictureInPicture?.start()
     }
 
     private func toggleInlineSharing() {
@@ -196,6 +250,9 @@ struct ContentView: View {
                             .buttonStyle(.plain)
                         }
                         if connection.nearby.isEmpty && connection.bluetoothReady { Text("Looking for nearby Macs…").foregroundStyle(.secondary).padding() }
+                        if let installer = MacInstaller.bundled {
+                            macSetup(installer)
+                        }
                     }
                 }
             }
@@ -204,6 +261,24 @@ struct ContentView: View {
                 UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
             }.font(.footnote)
         }
+    }
+
+    private func macSetup(_ installer: MacInstaller) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Set Up Your Mac", systemImage: "laptopcomputer")
+                .font(.headline)
+            Text("AirDrop the installer to your Mac, then open it there. Requires macOS 14 or later.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ShareLink(item: installer, preview: SharePreview("AirPointer Remote for Mac")) {
+                Label("Share Mac Installer", systemImage: "square.and.arrow.up")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var remote: some View {
@@ -314,6 +389,22 @@ struct ContentView: View {
             }
             .navigationTitle("How to Use")
             .toolbar { Button("Done") { showHelp = false } }
+        }
+    }
+}
+
+
+private struct MacInstaller: Transferable {
+    let url: URL
+
+    static var bundled: MacInstaller? {
+        Bundle.main.url(forResource: "AirPointer Remote for Mac", withExtension: "dmg")
+            .map(MacInstaller.init)
+    }
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(exportedContentType: UTType(filenameExtension: "dmg") ?? .data) { installer in
+            SentTransferredFile(installer.url)
         }
     }
 }

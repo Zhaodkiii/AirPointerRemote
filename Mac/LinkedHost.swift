@@ -207,6 +207,9 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             return
         }
         self.backgroundDeadline = nil
+        viewingOnly = false
+        setVideoBitRate(LinkedEncoder.desktopBitRate)
+        playbackPaused = false
         hasPicture = false
         lastHeartbeat = Date()
         deadline = Date().addingTimeInterval(10)
@@ -220,6 +223,51 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     }
 
     private var awaitingForegroundFrame = false
+    private var viewingOnly = false
+    private var playbackPaused = false
+    private static let pipBitRate = 1_400_000
+    private static let congestedPiPBitRate = 650_000
+    private var videoBitRate = LinkedEncoder.desktopBitRate
+    private var slowPiPAcks = 0
+    private var fastPiPAcks = 0
+
+    private func setVideoBitRate(_ rate: Int) {
+        guard rate != videoBitRate else { return }
+        videoBitRate = rate
+        encoder?.setBitRate(rate)
+        videoLog.notice("Desktop bitrate target: \(rate) bits/s")
+    }
+
+    private func updateViewing(_ mode: Double) {
+        guard mode == 0 || mode == 1 || mode == 2 else { return }
+        let wasViewing = viewingOnly
+        viewingOnly = mode != 0
+        if viewingOnly != wasViewing {
+            slowPiPAcks = 0
+            fastPiPAcks = 0
+            setVideoBitRate(viewingOnly ? Self.pipBitRate : LinkedEncoder.desktopBitRate)
+        }
+        if viewingOnly {
+            mouse.reset()
+            leftPress = nil
+            pendingKeyboardClick = nil
+            focus.invalidate()
+            lastFocus = nil
+        }
+        if mode == 2 {
+            playbackPaused = true
+            pending = nil
+        } else if playbackPaused || mode == 0 {
+            playbackPaused = false
+            guard let readyMessage else { return }
+            generation += 1
+            pending = latestSample
+            awaitingForegroundFrame = true
+            readyAfterDrain = readyMessage
+            deadline = Date().addingTimeInterval(5)
+            encodeLatest()
+        }
+    }
 
     private func capture(_ filter: SCContentFilter, knownID: CGDirectDisplayID? = nil) {
         guard !ended, stream == nil else { return }
@@ -253,6 +301,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         var ready = LinkedMessage(.ready, x: Double(config.width), y: Double(config.height), text: title)
         ready.supportsGestures = true
         ready.backgroundResume = true
+        ready.pictureInPicture = true
         readyMessage = ready
         channel?.send(ready)
         deadline = Date().addingTimeInterval(10)
@@ -273,13 +322,13 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         if state == .blank || state == .suspended || state == .stopped { stop("Display unavailable. Open the lid or reconnect a display.", mayReconnect: true); return }
         guard state == .complete, sample.imageBuffer != nil else { return }
         latestSample = sample
-        guard backgroundDeadline == nil else { return }
+        guard backgroundDeadline == nil, !playbackPaused else { return }
         pending = sample
         encodeLatest()
     }
 
     private func encodeLatest() {
-        guard backgroundDeadline == nil else { return }
+        guard backgroundDeadline == nil, !playbackPaused else { return }
         if let ready = readyAfterDrain {
             guard frames.isEmpty else { return }
             readyAfterDrain = nil
@@ -307,6 +356,12 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         frames.removeFirst()
         let now = ProcessInfo.processInfo.systemUptime
         let acknowledgement = now - sent
+        if viewingOnly && frame.generation == generation {
+            slowPiPAcks = acknowledgement > 0.18 ? slowPiPAcks + 1 : 0
+            fastPiPAcks = acknowledgement < 0.08 ? fastPiPAcks + 1 : 0
+            if slowPiPAcks == 3 { setVideoBitRate(Self.congestedPiPBitRate) }
+            if fastPiPAcks == 60 { setVideoBitRate(Self.pipBitRate) }
+        }
         if now - frame.started >= 0.12, now - lastSlowFrameLog >= 1 {
             lastSlowFrameLog = now
             let encodingMilliseconds = Int((sent - frame.started) * 1000)
@@ -346,12 +401,12 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
                 videoLog.notice("Waiting for video acknowledgement; screen-positioned actions paused")
             }
         }
-        channel?.send(.init(.alive, x: displayID != nil && access && acceptsLinkedInput ? 1 : 0))
-        focus.refreshInBackground { [weak self] in self?.publishFocus() }
+        channel?.send(.init(.alive, x: displayID != nil && access && acceptsLinkedInput && !viewingOnly && !awaitingForegroundFrame ? 1 : 0))
+        if !viewingOnly { focus.refreshInBackground { [weak self] in self?.publishFocus() } }
     }
 
     private func publishFocus(for click: UUID? = nil) {
-        guard lastFocus != focus.token || click != nil else { return }
+        guard !viewingOnly, lastFocus != focus.token || click != nil else { return }
         lastFocus = focus.token
         var update = LinkedMessage(.focus, token: lastFocus)
         update.composerVersion = 1
@@ -392,7 +447,11 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             setAwake(message.x == 1)
             return
         }
-        guard acceptsLinkedInput else { return }
+        if message.kind == .viewing {
+            updateViewing(message.x)
+            return
+        }
+        guard acceptsLinkedInput, !viewingOnly else { return }
         if message.kind == .dragEnd {
             let press = mouse.held ? leftPress : nil
             leftPress = nil

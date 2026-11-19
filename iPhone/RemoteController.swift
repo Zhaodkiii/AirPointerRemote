@@ -45,10 +45,10 @@ final class RemoteController: ObservableObject {
     var canControl: Bool { connection.connected && connection.accessibility && !connection.macPaused && !paused && foreground && !interactionSuspended }
     var airActive: Bool { canControl && mode != .trackpad && (airHeld || continuous) }
 
-    func setForeground(_ active: Bool, inBackground: Bool) {
+    func setForeground(_ active: Bool, inBackground: Bool, viewing: Bool = false) {
         foreground = active
         if !active && !connection.linkedRequested { stop() }
-        if active || inBackground { connection.setForeground(active) }
+        if active || inBackground { connection.setForeground(active, viewing: viewing) }
         UIApplication.shared.isIdleTimerDisabled = active && connection.connected
         updateMotion()
     }

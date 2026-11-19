@@ -24,7 +24,7 @@ enum PhoneProtocol {
 
     // Heartbeat phases understood by receivers advertising background resume.
     enum LinkedLifecycle: UInt8 {
-        case foreground = 1, background = 2
+        case foreground = 1, background = 2, viewing = 3
         static let grace: TimeInterval = 20
     }
 

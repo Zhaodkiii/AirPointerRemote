@@ -20,6 +20,7 @@ final class PhoneReceiver {
         var authorized = false
         var lastSeen = ProcessInfo.processInfo.systemUptime
         var backgroundDeadline: TimeInterval?
+        var backgroundViewing = false
         var lastStatus = 0.0
         init(_ central: CBCentral) { self.central = central }
     }
@@ -154,16 +155,22 @@ final class PhoneReceiver {
             status(session, state: "disconnected")
             return
         }
-        if command.action == .linkEnd { session.backgroundDeadline = nil; endSharing(); return }
+        if command.action == .linkEnd { session.backgroundViewing = false; session.backgroundDeadline = nil; endSharing(); return }
         if command.action == .heartbeat,
            let lifecycle = PhoneProtocol.LinkedLifecycle(rawValue: command.phase), let host = linked {
             switch lifecycle {
+            case .viewing:
+                session.backgroundViewing = true
+                allowPendingPointer = false
+                mouse.reset()
             case .background:
+                session.backgroundViewing = false
                 if session.backgroundDeadline == nil {
                     session.backgroundDeadline = session.lastSeen + PhoneProtocol.LinkedLifecycle.grace
                     DispatchQueue.main.async { host.pauseForBackground() }
                 }
             case .foreground:
+                session.backgroundViewing = false
                 if session.backgroundDeadline != nil {
                     session.backgroundDeadline = nil
                     DispatchQueue.main.async { host.resumeFromBackground() }
@@ -171,6 +178,7 @@ final class PhoneReceiver {
             }
             return
         }
+        if session.backgroundViewing, ![.stop, .pause, .heartbeat].contains(command.action) { return }
         if session.backgroundDeadline != nil, ![.stop, .pause, .heartbeat].contains(command.action) { return }
         if command.action == .linkStart {
             guard !paused, let first = UInt32(exactly: command.x), let second = UInt32(exactly: command.y) else { return }
@@ -259,7 +267,7 @@ final class PhoneReceiver {
         if let activeID, let session = sessions[activeID] {
             publishActivity(session)
             if now - session.lastSeen > 0.3 { mouse.reset() }
-            if now > (session.backgroundDeadline ?? session.lastSeen + 3) {
+            if !(session.backgroundViewing && linked != nil), now > (session.backgroundDeadline ?? session.lastSeen + 3) {
                 session.authorized = false
                 endSharing()
                 self.activeID = nil
