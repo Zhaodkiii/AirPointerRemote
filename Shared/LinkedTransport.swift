@@ -55,6 +55,10 @@ struct LinkedMessage: Codable {
     var padGesture: PhoneProtocol.PadGesture?
     var backgroundResume: Bool?
     var pictureInPicture: Bool?
+    var frameEnqueued: Bool?
+    var videoDelayed: Bool?
+    var videoBitrate: Int?
+    var videoFPS: Int?
     var kind: Kind
     var x: Double = 0
     var y: Double = 0

@@ -16,7 +16,11 @@ final class LinkedVideoStream {
     private var heartbeat: DispatchSourceTimer?
     private var backgroundParked = false
     private var lastFrame: TimeInterval?
-    private var lastLog: TimeInterval = 0
+    private var metricsStart: TimeInterval?
+    private var receivedFrames = 0
+    private var longestGap: TimeInterval = 0
+    private var longGaps = 0
+    private var enqueueTime: TimeInterval = 0
 
     var onClose: ((String) -> Void)?
     var onMessage: ((LinkedMessage) -> Void)?
@@ -84,26 +88,49 @@ final class LinkedVideoStream {
             playback = .playing
             decoder = LinkedDecoder()
             lastFrame = nil
+            metricsStart = nil
+            receivedFrames = 0
+            longestGap = 0
+            longGaps = 0
+            enqueueTime = 0
             if renderer.status == .failed { renderer.flush(removingDisplayedImage: true) }
         }
         DispatchQueue.main.async { [weak self] in self?.onMessage?(message) }
     }
 
     private func render(_ bytes: Data) {
-        guard playback == .playing else { link.send(.init(.frameAck)); return }
+        var acknowledgement = LinkedMessage(.frameAck)
+        acknowledgement.frameEnqueued = playback == .playing
+        guard playback == .playing else { link.send(acknowledgement); return }
         let started = ProcessInfo.processInfo.systemUptime
         guard renderer.status != .failed, let sample = decoder.sample(from: bytes) else {
             link.close("Video playback interrupted. Resume sharing to try again.")
             return
         }
         renderer.enqueue(sample)
-        link.send(.init(.frameAck))
+        link.send(acknowledgement)
         let now = ProcessInfo.processInfo.systemUptime
-        if let lastFrame, started - lastFrame >= 0.25, now - lastLog >= 1 {
-            lastLog = now
-            log.notice("Desktop frame gap \(Int((started - lastFrame) * 1000)) ms, enqueue \(Int((now - started) * 1000)) ms")
+        if let lastFrame {
+            let gap = started - lastFrame
+            longestGap = max(longestGap, gap)
+            if gap >= 0.25 { longGaps += 1 }
         }
         lastFrame = started
+        receivedFrames += 1
+        enqueueTime += now - started
+        if let metricsStart, now - metricsStart >= 1 {
+            let fps = Int(Double(receivedFrames) / (now - metricsStart))
+            let gapMilliseconds = Int(longestGap * 1000)
+            let enqueueMilliseconds = Int(enqueueTime / Double(receivedFrames) * 1000)
+            log.debug("Video receive: fps=\(fps) gaps_250ms=\(self.longGaps) max_gap_ms=\(gapMilliseconds) avg_enqueue_ms=\(enqueueMilliseconds)")
+            self.metricsStart = now
+            receivedFrames = 0
+            longestGap = 0
+            longGaps = 0
+            enqueueTime = 0
+        } else if metricsStart == nil {
+            metricsStart = now
+        }
         if needsFirstFrame {
             needsFirstFrame = false
             DispatchQueue.main.async { [weak self] in self?.onFirstFrame?() }

@@ -5,7 +5,27 @@ import Foundation
 
 /// Loopback exercise using the same TLS, framing and H.264 path as a physical pairing.
 @main struct LinkedScreenChecks {
+    private static func verifyAdaptiveQuality() {
+        var quality = LinkedVideoQuality()
+        precondition(quality.evaluate(now: 1, oldestAge: 0.36, windowFull: true) == 1)
+        quality.applied(1, at: 1)
+        precondition(quality.evaluate(now: 2, oldestAge: 0.6, windowFull: true) == nil)
+        precondition(quality.evaluate(now: 3, oldestAge: 0.6, windowFull: true) == 2)
+        quality.applied(2, at: 3)
+        precondition(quality.evaluate(now: 6, oldestAge: 0.6, windowFull: true) == nil)
+        precondition(quality.evaluate(now: 7, oldestAge: 0.6, windowFull: true) == 3)
+        quality.applied(3, at: 7)
+        precondition(quality.profile.fps == 20)
+        precondition(quality.evaluate(now: 25, oldestAge: 0, windowFull: false) == nil)
+        for second in 26...36 {
+            for _ in 0..<10 { quality.record(now: Double(second), delay: 0.045) }
+            let upgrade = quality.evaluate(now: Double(second), oldestAge: 0, windowFull: false)
+            precondition(upgrade == (second == 36 ? 2 : nil))
+        }
+    }
+
     static func main() throws {
+        verifyAdaptiveQuality()
         let offer = LinkedOffer(key: SymmetricKey(size: .bits256), first: 1, second: 2)
         try verifyWrongKeyIsRefused(offer)
         let listener = try NWListener(using: offer.parameters)

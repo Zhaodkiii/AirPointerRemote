@@ -145,6 +145,7 @@ struct LinkedWorkspace: View {
             Button("Zoom Out", systemImage: "minus.magnifyingglass") {
                 zoomRequest = .init(factor: 1 / 1.5)
             }.disabled(!client.previewZoomed)
+            if let videoQuality = client.videoQuality { Text(videoQuality) }
             Button("Fit Display") { fitPreview() }.disabled(!client.previewZoomed)
             Button("Click at Pointer") { client.control(.init(.currentClick)) }.disabled(!client.canPoint)
             Button("Right Click at Pointer") { client.control(.init(.currentRight)) }.disabled(!client.canPoint)
@@ -192,6 +193,11 @@ struct LinkedWorkspace: View {
                         if client.resuming {
                             Label("Restoring display…", systemImage: "arrow.clockwise")
                                 .padding(8).background(.regularMaterial, in: Capsule())
+                        } else if client.videoDelayed {
+                            Label("Video delayed. Clicks paused.", systemImage: "hourglass")
+                                .font(.subheadline)
+                                .padding(8).background(.regularMaterial, in: Capsule())
+                                .allowsHitTesting(false)
                         }
                     }
                 VStack(spacing: 0) {
@@ -203,7 +209,7 @@ struct LinkedWorkspace: View {
                                     .frame(minWidth: 44, minHeight: 44)
                                     .accessibilityLabel("Fit Display")
                             }
-                            if !client.canPoint {
+                            if !client.canPoint && !client.videoDelayed {
                                 Text("View only").font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()

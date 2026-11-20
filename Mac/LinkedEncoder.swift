@@ -19,9 +19,15 @@ final class LinkedEncoder {
         ] as CFDictionary)
     }
 
-    func setBitRate(_ bitRate: Int) {
+    func setBitRate(_ bitRate: Int) -> Bool {
+        guard let encoder else { return false }
+        return VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_AverageBitRate,
+                                    value: NSNumber(value: bitRate)) == noErr
+    }
+
+    func setExpectedFrameRate(_ fps: Int) {
         guard let encoder else { return }
-        VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_AverageBitRate, value: NSNumber(value: bitRate))
+        VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: NSNumber(value: fps))
     }
 
     deinit { if let encoder { VTCompressionSessionInvalidate(encoder) } }

@@ -47,6 +47,10 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private var latestSample: CMSampleBuffer?
     private var backgroundDeadline: TimeInterval?
     private var readyMessage: LinkedMessage?
+    private var lidDisplayUUID: String?
+    private var lidRecoveryDeadline: TimeInterval?
+    private var nextLidRecoveryAttempt: TimeInterval = 0
+    private var findingLidDisplay = false
     // TCP preserves frame order. Keep the pipeline bounded while retaining
     // the latest unencoded sample when the receiver falls behind.
     private struct Frame {
@@ -62,9 +66,14 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private let videoLog = Logger(subsystem: "com.daokaihua.airpointerremote", category: "LinkedVideo")
     private var lastStallLog: TimeInterval = 0
     private var lastSlowFrameLog: TimeInterval = 0
+    private var recoveringFromDelay = false
     private var pictureDelayed: Bool {
-        guard let oldest = frames.first else { return false }
-        return ProcessInfo.processInfo.systemUptime - oldest.started >= 0.6
+        recoveringFromDelay || oldestFrameAge >= 0.6
+    }
+
+    private var oldestFrameAge: TimeInterval {
+        guard let oldest = frames.first else { return 0 }
+        return ProcessInfo.processInfo.systemUptime - oldest.started
     }
     var acceptsLinkedInput = true
     private var hasPicture = false
@@ -119,7 +128,18 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         let handle = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             if name == NSApplication.didChangeScreenParametersNotification || name == NSWorkspace.screensDidSleepNotification {
+                if lidRecoveryDeadline != nil { return }
                 if stream == nil { return }
+                if lidDisplayUUID != nil {
+                    mouse.reset()
+                    if let id = displayID, CGDisplayIsActive(id) != 0, CGDisplayIsAsleep(id) == 0,
+                       CGDisplayBounds(id).size == bounds.size, CGDisplayRotation(id) == rotation {
+                        bounds = CGDisplayBounds(id)
+                    } else {
+                        recoverLidCapture()
+                    }
+                    return
+                }
                 // Closing the lid may move the already shared external screen to the desktop origin.
                 // Keep capturing only that same, awake display with an unchanged coordinate scale.
                 if activity != nil, let id = displayID, CGDisplayIsBuiltin(id) == 0,
@@ -145,22 +165,36 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         deadline = Date().addingTimeInterval(90)
         report?("Choose a display to share with your paired iPhone")
         channel?.send(.init(.waiting))
-        guard !forcePicker, let saved = Self.remembered[peer], CGPreflightScreenCaptureAccess() else {
+        guard !forcePicker else {
             presentPicker()
             return
         }
+
+        let lidDisplays = NSScreen.screens.compactMap {
+            ($0.deviceDescription[.init("NSScreenNumber")] as? NSNumber)?.uint32Value
+        }.filter { isLidDisplay($0) && CGDisplayIsActive($0) != 0 && CGDisplayIsAsleep($0) == 0 }
+        let lidUUID = lidDisplays.count == 1 ? lidDisplays.first.flatMap(displayUUID) : nil
+        let rememberedUUID = Self.remembered[peer]
+        guard let targetUUID = lidUUID ?? rememberedUUID, CGPreflightScreenCaptureAccess() else {
+            presentPicker()
+            return
+        }
+
         SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { [weak self] content, _ in
             DispatchQueue.main.async {
                 guard let self, !self.ended else { return }
                 let matches = content?.displays.filter {
-                    self.displayUUID($0.displayID) == saved && CGDisplayIsActive($0.displayID) != 0 &&
-                        CGDisplayIsAsleep($0.displayID) == 0
+                    let id = $0.displayID
+                    return self.displayUUID(id) == targetUUID &&
+                        (lidUUID == nil || self.isLidDisplay(id)) &&
+                        CGDisplayIsActive(id) != 0 && CGDisplayIsAsleep(id) == 0
                 } ?? []
-                guard Self.remembered[self.peer] == saved, matches.count == 1, let match = matches.first else {
+                guard (lidUUID != nil || Self.remembered[self.peer] == targetUUID),
+                      matches.count == 1, let display = matches.first else {
                     self.presentPicker()
                     return
                 }
-                self.capture(SCContentFilter(display: match, excludingWindows: []), knownID: match.displayID)
+                self.capture(SCContentFilter(display: display, excludingWindows: []), knownID: display.displayID)
             }
         }
     }
@@ -192,6 +226,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         guard !ended, readyMessage != nil, backgroundDeadline == nil else { return }
         backgroundDeadline = ProcessInfo.processInfo.systemUptime + PhoneProtocol.LinkedLifecycle.grace
         pending = nil
+        resetQualityMeasurements()
         generation += 1
         readyAfterDrain = nil
         mouse.reset()
@@ -207,8 +242,12 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             return
         }
         self.backgroundDeadline = nil
+        if lidRecoveryDeadline != nil {
+            lidRecoveryDeadline = ProcessInfo.processInfo.systemUptime + 10
+        }
         viewingOnly = false
-        setVideoBitRate(LinkedEncoder.desktopBitRate)
+        _ = setVideoBitRate(quality.profile.bitrate)
+        encoder?.setExpectedFrameRate(quality.profile.fps)
         playbackPaused = false
         hasPicture = false
         lastHeartbeat = Date()
@@ -228,14 +267,61 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private static let pipBitRate = 1_400_000
     private static let congestedPiPBitRate = 650_000
     private var videoBitRate = LinkedEncoder.desktopBitRate
+    private var quality = LinkedVideoQuality()
+    private var nextEncodeTime: TimeInterval = 0
+    private var encodeWakeScheduled = false
+    private var lastMetricsTime = ProcessInfo.processInfo.systemUptime
+    private var capturedFrames = 0
+    private var replacedSamples = 0
+    private var sentBytes = 0
     private var slowPiPAcks = 0
     private var fastPiPAcks = 0
 
-    private func setVideoBitRate(_ rate: Int) {
-        guard rate != videoBitRate else { return }
+    private func setVideoBitRate(_ rate: Int) -> Bool {
+        guard rate != videoBitRate else { return true }
+        guard encoder?.setBitRate(rate) == true else {
+            videoLog.error("Could not set desktop bitrate to \(rate) bits/s")
+            return false
+        }
         videoBitRate = rate
-        encoder?.setBitRate(rate)
         videoLog.notice("Desktop bitrate target: \(rate) bits/s")
+        return true
+    }
+
+    private func resetQualityMeasurements() {
+        quality.resetMeasurements()
+        nextEncodeTime = 0
+        recoveringFromDelay = false
+        slowPiPAcks = 0
+        fastPiPAcks = 0
+    }
+
+    private func evaluateQuality() {
+        let now = ProcessInfo.processInfo.systemUptime
+        if let level = quality.evaluate(now: now, oldestAge: oldestFrameAge,
+                                        windowFull: frames.count == frameCapacity) {
+            let profile = LinkedVideoQuality.profiles[level]
+            // Cool down even if VideoToolbox rejects the requested bitrate.
+            let appliedLevel = setVideoBitRate(profile.bitrate) ? level : quality.level
+            quality.applied(appliedLevel, at: now)
+            encoder?.setExpectedFrameRate(quality.profile.fps)
+            nextEncodeTime = 0
+        }
+    }
+
+    private func protectDelayedInput() {
+        guard oldestFrameAge >= 0.6, hasPicture, !awaitingForegroundFrame,
+              !viewingOnly, !playbackPaused, backgroundDeadline == nil,
+              let readyMessage else { return }
+        recoveringFromDelay = true
+        mouse.reset()
+        leftPress = nil
+        pendingKeyboardClick = nil
+        generation += 1
+        awaitingForegroundFrame = true
+        readyAfterDrain = readyMessage
+        pending = latestSample
+        nextEncodeTime = 0
     }
 
     private func updateViewing(_ mode: Double) {
@@ -243,9 +329,10 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         let wasViewing = viewingOnly
         viewingOnly = mode != 0
         if viewingOnly != wasViewing {
-            slowPiPAcks = 0
-            fastPiPAcks = 0
-            setVideoBitRate(viewingOnly ? Self.pipBitRate : LinkedEncoder.desktopBitRate)
+            resetQualityMeasurements()
+            if viewingOnly { generation += 1 }
+            _ = setVideoBitRate(viewingOnly ? Self.pipBitRate : quality.profile.bitrate)
+            encoder?.setExpectedFrameRate(viewingOnly ? 30 : quality.profile.fps)
         }
         if viewingOnly {
             mouse.reset()
@@ -255,6 +342,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             lastFocus = nil
         }
         if mode == 2 {
+            resetQualityMeasurements()
             playbackPaused = true
             pending = nil
         } else if playbackPaused || mode == 0 {
@@ -266,6 +354,61 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             readyAfterDrain = readyMessage
             deadline = Date().addingTimeInterval(5)
             encodeLatest()
+        }
+    }
+
+    private func isLidDisplay(_ id: CGDirectDisplayID) -> Bool {
+        CGDisplayVendorNumber(id) == 0x4c44 && CGDisplayModelNumber(id) == 1 &&
+            CGDisplaySerialNumber(id) == 1
+    }
+
+    private func recoverLidCapture() {
+        guard CGPreflightScreenCaptureAccess() else {
+            stop("Allow Screen Recording on the Mac to restore Lid Desktop after closing the lid.")
+            return
+        }
+        let now = ProcessInfo.processInfo.systemUptime
+        if lidRecoveryDeadline == nil {
+            lidRecoveryDeadline = now + 10
+            nextLidRecoveryAttempt = now + 0.5
+            videoLog.notice("Lid Desktop capture interrupted; recovering the selected display")
+        }
+        generation += 1
+        hasPicture = false
+        awaitingForegroundFrame = true
+        pending = nil
+        latestSample = nil
+        readyAfterDrain = nil
+        mouse.reset()
+        leftPress = nil
+        pendingKeyboardClick = nil
+        focus.invalidate()
+        lastFocus = nil
+        resetQualityMeasurements()
+        let oldStream = stream
+        stream = nil
+        oldStream?.stopCapture(completionHandler: { _ in })
+        channel?.send(.init(.alive, x: 0))
+    }
+
+    private func findLidDisplay(now: TimeInterval) {
+        guard !findingLidDisplay, !encoding, frames.isEmpty,
+              now >= nextLidRecoveryAttempt, let lidDisplayUUID else { return }
+        findingLidDisplay = true
+        nextLidRecoveryAttempt = now + 1
+        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { [weak self] content, _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.findingLidDisplay = false
+                guard !self.ended, self.lidRecoveryDeadline != nil, self.stream == nil else { return }
+                let matches = content?.displays.filter {
+                    let id = $0.displayID
+                    return self.isLidDisplay(id) && self.displayUUID(id) == lidDisplayUUID &&
+                        CGDisplayIsActive(id) != 0 && CGDisplayIsAsleep(id) == 0
+                } ?? []
+                guard matches.count == 1, let display = matches.first else { return }
+                self.capture(SCContentFilter(display: display, excludingWindows: []), knownID: display.displayID)
+            }
         }
     }
 
@@ -290,12 +433,18 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         config.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
         guard let encoder = LinkedEncoder(width: config.width, height: config.height) else { stop("Video encoder unavailable."); return }
         self.encoder = encoder
+        if lidRecoveryDeadline != nil {
+            _ = encoder.setBitRate(videoBitRate)
+            encoder.setExpectedFrameRate(viewingOnly ? 30 : quality.profile.fps)
+        }
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
         self.stream = stream
         do { try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: .main) }
         catch { stop(error.localizedDescription); return }
         let title = NSScreen.screens.first { ($0.deviceDescription[.init("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID }?.localizedName ?? "Mac display"
         selectedUUID = displayID.flatMap(displayUUID)
+        if let id = displayID, isLidDisplay(id) { lidDisplayUUID = selectedUUID }
+        videoLog.notice("Sharing display: \(title, privacy: .public)")
         displayName = title
         Self.sharing = self
         var ready = LinkedMessage(.ready, x: Double(config.width), y: Double(config.height), text: title)
@@ -303,41 +452,81 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         ready.backgroundResume = true
         ready.pictureInPicture = true
         readyMessage = ready
-        channel?.send(ready)
+        if lidRecoveryDeadline != nil {
+            nextLidRecoveryAttempt = ProcessInfo.processInfo.systemUptime + 3
+            readyAfterDrain = ready
+        } else { channel?.send(ready) }
         deadline = Date().addingTimeInterval(10)
         report?("Sharing " + title + " with iPhone")
         stream.startCapture { [weak self] error in
-            if let error { DispatchQueue.main.async { self?.stop(error.localizedDescription) } }
+            if let error {
+                DispatchQueue.main.async { [weak stream] in
+                    guard let self, let stream, self.stream === stream else { return }
+                    if self.lidRecoveryDeadline != nil { self.recoverLidCapture() }
+                    else { self.stop(error.localizedDescription) }
+                }
+            }
         }
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        DispatchQueue.main.async { [weak self] in self?.stop(error.localizedDescription) }
+        DispatchQueue.main.async { [weak self, weak stream] in
+            guard let self, let stream, self.stream === stream else { return }
+            let failure = error as NSError
+            if self.lidDisplayUUID != nil,
+               failure.domain == SCStreamErrorDomain, [-3821, -3815, -3814, -3811].contains(failure.code) {
+                self.recoverLidCapture()
+            } else {
+                self.stop(error.localizedDescription)
+            }
+        }
     }
     func stream(_ stream: SCStream, didOutputSampleBuffer sample: CMSampleBuffer, of type: SCStreamOutputType) {
         guard !ended, self.stream === stream, type == .screen,
               let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let raw = attachments.first?[.status] as? Int, let state = SCFrameStatus(rawValue: raw) else { return }
         if state == .idle { return }
-        if state == .blank || state == .suspended || state == .stopped { stop("Display unavailable. Open the lid or reconnect a display.", mayReconnect: true); return }
+        if state == .blank || state == .suspended || state == .stopped {
+            if lidDisplayUUID != nil { recoverLidCapture() }
+            else { stop("Display unavailable. Open the lid or reconnect a display.", mayReconnect: true) }
+            return
+        }
         guard state == .complete, sample.imageBuffer != nil else { return }
         latestSample = sample
         guard backgroundDeadline == nil, !playbackPaused else { return }
+        capturedFrames += 1
+        if pending != nil { replacedSamples += 1 }
         pending = sample
         encodeLatest()
     }
 
     private func encodeLatest() {
         guard backgroundDeadline == nil, !playbackPaused else { return }
+        if lidRecoveryDeadline != nil, pending == nil { return }
         if let ready = readyAfterDrain {
             guard frames.isEmpty else { return }
             readyAfterDrain = nil
             channel?.send(ready)
         }
         guard !encoding, frames.count < frameCapacity, let sample = pending, let encoder else { return }
+        if awaitingForegroundFrame, !frames.isEmpty { return }
+        let started = ProcessInfo.processInfo.systemUptime
+        let fps = viewingOnly ? 30 : quality.profile.fps
+        if fps < 30, !awaitingForegroundFrame, started < nextEncodeTime {
+            if !encodeWakeScheduled {
+                encodeWakeScheduled = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + (nextEncodeTime - started)) { [weak self] in
+                    guard let self, !ended else { return }
+                    encodeWakeScheduled = false
+                    encodeLatest()
+                }
+            }
+            return
+        }
+        let frameInterval = 1 / Double(fps)
+        nextEncodeTime = max(nextEncodeTime + frameInterval, started + frameInterval / 2)
         pending = nil
         encoding = true
-        let started = ProcessInfo.processInfo.systemUptime
         let frameGeneration = generation
         if frames.isEmpty { deadline = Date().addingTimeInterval(5) }
         frames.append(Frame(started: started, generation: frameGeneration))
@@ -346,21 +535,27 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             guard let data else { stop("Video encoding interrupted."); return }
             frames[frames.count - 1].sent = ProcessInfo.processInfo.systemUptime
             encoding = false
+            sentBytes += data.count
             channel?.send(data, frame: true)
             encodeLatest()
         }
     }
 
-    private func acknowledgeFrame() {
+    private func acknowledgeFrame(enqueued: Bool) {
+        protectDelayedInput()
         guard let frame = frames.first, let sent = frame.sent else { return }
         frames.removeFirst()
         let now = ProcessInfo.processInfo.systemUptime
         let acknowledgement = now - sent
-        if viewingOnly && frame.generation == generation {
+        let currentPicture = enqueued && frame.generation == generation
+        if currentPicture && !awaitingForegroundFrame && backgroundDeadline == nil && !playbackPaused {
+            if !viewingOnly { quality.record(now: now, delay: acknowledgement) }
+        }
+        if currentPicture && viewingOnly && !playbackPaused && !awaitingForegroundFrame {
             slowPiPAcks = acknowledgement > 0.18 ? slowPiPAcks + 1 : 0
             fastPiPAcks = acknowledgement < 0.08 ? fastPiPAcks + 1 : 0
-            if slowPiPAcks == 3 { setVideoBitRate(Self.congestedPiPBitRate) }
-            if fastPiPAcks == 60 { setVideoBitRate(Self.pipBitRate) }
+            if slowPiPAcks == 3 { _ = setVideoBitRate(Self.congestedPiPBitRate) }
+            if fastPiPAcks == 60 { _ = setVideoBitRate(Self.pipBitRate) }
         }
         if now - frame.started >= 0.12, now - lastSlowFrameLog >= 1 {
             lastSlowFrameLog = now
@@ -368,7 +563,16 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             let acknowledgementMilliseconds = Int(acknowledgement * 1000)
             videoLog.notice("Slow frame: encode \(encodingMilliseconds) ms, send to ACK \(acknowledgementMilliseconds) ms, \(self.frames.count) pending")
         }
-        if backgroundDeadline == nil, frame.generation == generation {
+        if backgroundDeadline == nil, currentPicture {
+            if lidRecoveryDeadline != nil, stream != nil {
+                lidRecoveryDeadline = nil
+                videoLog.notice("Lid Desktop capture recovered and first frame acknowledged")
+            }
+            if recoveringFromDelay && awaitingForegroundFrame {
+                // A slow recovery keyframe is still newer than the drained backlog.
+                recoveringFromDelay = false
+                resetQualityMeasurements()
+            }
             hasPicture = true
             awaitingForegroundFrame = false
         }
@@ -386,11 +590,46 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             }
             return
         }
-        if (stream == nil || !frames.isEmpty || !hasPicture) && Date() > deadline { stop("Sharing timed out. Try again."); return }
+        if let recoveryDeadline = lidRecoveryDeadline {
+            let now = ProcessInfo.processInfo.systemUptime
+            guard now < recoveryDeadline, Date().timeIntervalSince(lastHeartbeat) < 5 else {
+                stop("Lid Desktop did not resume. Open the lid and share Lid Desktop again.")
+                return
+            }
+            channel?.send(.init(.alive, x: 0))
+            if stream == nil {
+                findLidDisplay(now: now)
+            } else if latestSample == nil, now >= nextLidRecoveryAttempt {
+                recoverLidCapture()
+            }
+            return
+        }
+        if (stream == nil || !frames.isEmpty || !hasPicture || (awaitingForegroundFrame && !playbackPaused)),
+           Date() > deadline {
+            stop("Sharing timed out. Try again.")
+            return
+        }
         guard hasPicture else { return }
         if Date().timeIntervalSince(lastHeartbeat) > 3 {
             stop("iPhone stopped responding.")
             return
+        }
+        if !viewingOnly, !playbackPaused, hasPicture {
+            evaluateQuality()
+        }
+        protectDelayedInput()
+        encodeLatest()
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - lastMetricsTime >= 1 {
+            if capturedFrames > 0 || sentBytes > 0 || !frames.isEmpty {
+                let bitrate = Int(Double(sentBytes * 8) / (now - lastMetricsTime))
+                let oldestMilliseconds = Int(oldestFrameAge * 1000)
+                videoLog.debug("Video window: captured=\(self.capturedFrames) replaced=\(self.replacedSamples) sent_bps=\(bitrate) in_flight=\(self.frames.count) oldest_ms=\(oldestMilliseconds)")
+            }
+            lastMetricsTime = now
+            capturedFrames = 0
+            replacedSamples = 0
+            sentBytes = 0
         }
         let access = CGPreflightPostEventAccess()
         if !access || (pictureDelayed && mouse.held) { mouse.reset() }
@@ -401,7 +640,12 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
                 videoLog.notice("Waiting for video acknowledgement; screen-positioned actions paused")
             }
         }
-        channel?.send(.init(.alive, x: displayID != nil && access && acceptsLinkedInput && !viewingOnly && !awaitingForegroundFrame ? 1 : 0))
+        let canControl = displayID != nil && access && acceptsLinkedInput && !viewingOnly
+        var heartbeat = LinkedMessage(.alive, x: canControl && !awaitingForegroundFrame && !pictureDelayed ? 1 : 0)
+        heartbeat.videoDelayed = canControl && pictureDelayed
+        heartbeat.videoBitrate = videoBitRate
+        heartbeat.videoFPS = viewingOnly ? 30 : quality.profile.fps
+        channel?.send(heartbeat)
         if !viewingOnly { focus.refreshInBackground { [weak self] in self?.publishFocus() } }
     }
 
@@ -435,11 +679,10 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private func handle(_ message: LinkedMessage) {
         guard !ended else { return }
         if message.kind == .stop { stop(); return }
-        guard stream != nil else { return }
         if message.kind == .alive { lastHeartbeat = Date(); return }
         if message.kind == .frameAck {
             lastHeartbeat = Date()
-            acknowledgeFrame()
+            acknowledgeFrame(enqueued: message.frameEnqueued != false)
             return
         }
         guard backgroundDeadline == nil else { return }
@@ -451,7 +694,8 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             updateViewing(message.x)
             return
         }
-        guard acceptsLinkedInput, !viewingOnly else { return }
+        guard stream != nil, lidRecoveryDeadline == nil, acceptsLinkedInput, !viewingOnly else { return }
+        protectDelayedInput()
         if message.kind == .dragEnd {
             let press = mouse.held ? leftPress : nil
             leftPress = nil
@@ -464,7 +708,8 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             return
         }
         let passiveMotion = message.kind == .relative && !mouse.held
-        guard !awaitingForegroundFrame, hasPicture, passiveMotion || !pictureDelayed,
+        guard !awaitingForegroundFrame || (recoveringFromDelay && passiveMotion),
+              hasPicture, passiveMotion || !pictureDelayed,
               CGPreflightPostEventAccess(), let displayID, CGDisplayIsActive(displayID) != 0,
               CGDisplayBounds(displayID) == bounds, message.x.isFinite, message.y.isFinite else {
             if message.kind == .insert { channel?.send(.init(.rejected, request: message.request)) }
@@ -552,6 +797,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
 
     func stop(_ reason: String = "Screen sharing ended.", mayReconnect: Bool = false) {
         guard !ended else { return }
+        videoLog.notice("Screen sharing ended: \(reason, privacy: .public)")
         ended = true
         if Self.sharing === self { Self.sharing = nil }
         timer?.invalidate()

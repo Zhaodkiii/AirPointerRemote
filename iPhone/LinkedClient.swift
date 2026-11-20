@@ -24,6 +24,8 @@ final class LinkedClient: ObservableObject {
     @Published private(set) var submitting: UUID?
     @Published private(set) var awake = UserDefaults.standard.bool(forKey: "linked.keepMacAwake")
     @Published private(set) var canPoint = false
+    @Published private(set) var videoDelayed = false
+    @Published private(set) var videoQuality: String?
     // Resume only after a fresh authenticated Bluetooth connection to the same Mac.
     @Published private(set) var resumeMac: UUID?
     private var target: UUID?
@@ -170,7 +172,15 @@ final class LinkedClient: ObservableObject {
         case .alive:
             guard pausedAt == nil, !resuming else { return }
             deadline = Date().addingTimeInterval(5)
-            let allowed = message.x == 1 && pipState == .idle
+            let delayed = message.videoDelayed == true && pipState == .idle
+            if videoDelayed != delayed { videoDelayed = delayed }
+            let quality = message.videoBitrate.flatMap { bitrate in
+                message.videoFPS.map { fps in
+                    String(format: "%.1f Mbps · up to %d FPS", Double(bitrate) / 1_000_000, fps)
+                }
+            }
+            if videoQuality != quality { videoQuality = quality }
+            let allowed = message.x == 1 && !delayed && pipState == .idle
             if canPoint != allowed { canPoint = allowed }
         case .focus:
             guard pausedAt == nil, !resuming else { return }
@@ -312,6 +322,8 @@ final class LinkedClient: ObservableObject {
         phone?.finishLinkedScreen(); phone = nil
         pendingKeyboardClick = nil
         focus = nil; submitting = nil; canPoint = false
+        videoDelayed = false
+        videoQuality = nil
         if keepDraft && !draft.isEmpty {
             target = nil
             selectionID = nil
@@ -345,7 +357,7 @@ final class LinkedClient: ObservableObject {
     }
 
     func control(_ command: LinkedMessage) {
-        guard uiActive, live, canPoint else { return }
+        guard uiActive, live, canPoint || (videoDelayed && command.kind == .relative) else { return }
         if command.kind == .gesture && !supportsGestures { return }
         var message = command
         switch message.kind {
