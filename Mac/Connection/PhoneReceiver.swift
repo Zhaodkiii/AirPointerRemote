@@ -60,7 +60,7 @@ final class PhoneReceiver {
         reset()
         self.manager = manager
         self.output = output
-        if identity == nil { onState?("Could not access secure storage for iPhone pairing. Reopen the Mac app.") }
+        if identity == nil { onState?(String(localized: "Could not access secure storage for iPhone pairing. Reopen the Mac app.")) }
     }
 
     func subscribe(_ central: CBCentral) {
@@ -69,7 +69,7 @@ final class PhoneReceiver {
     }
 
     func unsubscribe(_ central: CBCentral) {
-        if activeID == central.identifier { endSharing(); mouse.reset(); activeID = nil; onEndControl?(); onState?("iPhone disconnected") }
+        if activeID == central.identifier { endSharing(); mouse.reset(); activeID = nil; onEndControl?(); onState?(String(localized: "iPhone disconnected")) }
         if pendingID == central.identifier {
             pendingID = nil
             if let session = sessions[central.identifier] { dismissPairingAlert(token: session.promptToken) }
@@ -112,10 +112,10 @@ final class PhoneReceiver {
                 DispatchQueue.main.async { [weak self, weak session] in
                     guard let self, let session else { return }
                     let alert = NSAlert()
-                    alert.messageText = "Allow \(name) to control the pointer?"
-                    alert.informativeText = "Confirm that your iPhone shows \(code). This allows the paired device to move, click, and drag the pointer."
-                    alert.addButton(withTitle: "Codes Match — Allow")
-                    alert.addButton(withTitle: "Decline")
+                    alert.messageText = String(localized: "Allow \(name) to control the pointer?")
+                    alert.informativeText = String(localized: "Confirm that your iPhone shows \(code). This allows the paired device to move, click, and drag the pointer.")
+                    alert.addButton(withTitle: String(localized: "Codes Match — Allow"))
+                    alert.addButton(withTitle: String(localized: "Decline"))
                     NSApp.activate(ignoringOtherApps: true)
                     self.pairingAlert = (token, alert)
                     let approved = alert.runModal() == .alertFirstButtonReturn
@@ -244,7 +244,7 @@ final class PhoneReceiver {
         if !trusted.contains(pin) { trusted.append(pin) }
         UserDefaults.standard.set(trusted, forKey: "phone.trustedKeys")
         print("iPhone authenticated: \(session.name), accessibility=\(cachedAccess)")
-        onState?("\(session.name) connected")
+        onState?(String(localized: "\(session.name) connected"))
         status(session)
     }
 
@@ -273,7 +273,7 @@ final class PhoneReceiver {
                 self.activeID = nil
                 onEndControl?()
                 status(session, state: "timeout")
-                onState?("iPhone connection timed out. Control stopped.")
+                onState?(String(localized: "iPhone connection timed out. Control stopped."))
             } else if session.backgroundDeadline == nil, now - session.lastStatus > 1 { status(session) }
         }
         let expired = sessions.filter { !$0.value.authorized && now - $0.value.lastSeen > 90 }.map(\.key)

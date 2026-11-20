@@ -17,7 +17,7 @@ struct MacDraftEditor: UIViewRepresentable {
         view.adjustsFontForContentSizeCategory = true
         view.textContainerInset = UIEdgeInsets(top: 9, left: 0, bottom: 8, right: 0)
         view.textContainer.lineFragmentPadding = 0
-        view.accessibilityLabel = "Text for Mac"
+        view.accessibilityLabel = String(localized: "Text for Mac")
         DispatchQueue.main.async { [weak view, weak client] in
             if client?.editing == true, view?.window != nil { view?.becomeFirstResponder() }
         }

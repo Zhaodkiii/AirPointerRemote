@@ -17,7 +17,7 @@
 | iPhone 将样本送入 renderer 后发 frameAck；暂停时也可能回 ACK 以排空管道 | ACK 可估算发送到入队的耗时。显示耗时需要另测；暂停回执不能用于恢复输入或升档 |
 | 已有 600 ms 在途帧保护、超时、拖动释放、前后台恢复与焦点令牌检查 | 扩充 iPhone 的反馈，并保留 Mac 最终校验。静止桌面长时间没有新帧可以是正常现象 |
 
-实现入口：[Mac 采集、队列和输入](../Mac/LinkedHost.swift)、[编码器](../Mac/LinkedEncoder.swift)、[共享协议](../Shared/LinkedTransport.swift)、[iPhone 收帧](../iPhone/LinkedVideoStream.swift)、[会话状态](../iPhone/LinkedClient.swift)、[共享界面](../iPhone/LinkedScreenView.swift)。
+实现入口：[Mac 采集、队列和输入](../Mac/LinkedScreen/LinkedHost.swift)、[编码器](../Mac/LinkedScreen/LinkedEncoder.swift)、[共享协议](../Shared/LinkedTransport.swift)、[iPhone 收帧](../iPhone/LinkedScreen/LinkedVideoStream.swift)、[会话状态](../iPhone/LinkedScreen/LinkedClient.swift)、[共享界面](../iPhone/LinkedScreen/LinkedScreenView.swift)。
 
 家用局域网要分别看 Mac 到路由器、手机到接入点两段；在手机热点下要看手机与 Mac 之间的无线链路。Mesh 漫游、同频争用和 TCP 重传均可能引起瞬时停顿。Mac 编码变慢、主队列繁忙、手机发热或渲染积压也可能出现相似现象。把这些列作假设，不能用物理距离、Wi-Fi 图标或蓝牙信号强度单独定因。
 

@@ -1,0 +1,3 @@
+"NSBluetoothAlwaysUsageDescription" = "通过蓝牙连接 Mac，让你用 iPhone 控制鼠标。";
+"NSLocalNetworkUsageDescription" = "通过本地网络连接已配对的 iPhone 和 Mac，以共享 Mac 屏幕。";
+"NSMotionUsageDescription" = "使用 iPhone 的转动来控制 Mac 指针。";

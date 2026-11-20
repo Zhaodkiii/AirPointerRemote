@@ -22,8 +22,8 @@ final class PadView: UIView, UIGestureRecognizerDelegate {
         super.init(frame: .zero)
         backgroundColor = .clear
         isMultipleTouchEnabled = true
-        accessibilityLabel = "Mouse Trackpad"
-        accessibilityHint = "Slide one finger to move. Tap to click. Scroll or right-click with two fingers."
+        accessibilityLabel = String(localized: "Mouse Trackpad")
+        accessibilityHint = String(localized: "Slide one finger to move. Tap to click. Scroll or right-click with two fingers.")
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         pan.maximumNumberOfTouches = 1
         let tap = TimestampedTap(target: self, action: #selector(tap(_:)))

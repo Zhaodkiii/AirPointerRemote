@@ -127,11 +127,11 @@ struct NotchView: View {
 
     @ViewBuilder private var toast: some View {
         let (symbol, text): (String, String) = switch live.toast {
-        case .connected: (live.phoneName == nil ? "applewatch" : "iphone", "Connected")
-        case .centered: ("scope", "Centered")
-        case .paused: ("pause.fill", "Paused")
-        case .resumed: ("play.fill", "Resumed")
-        case .lost, nil: ("applewatch.slash", "Disconnected")
+        case .connected: (live.phoneName == nil ? "applewatch" : "iphone", String(localized: "Connected"))
+        case .centered: ("scope", String(localized: "Centered"))
+        case .paused: ("pause.fill", String(localized: "Paused"))
+        case .resumed: ("play.fill", String(localized: "Resumed"))
+        case .lost, nil: ("applewatch.slash", String(localized: "Disconnected"))
         }
         HStack(spacing: 8) {
             Image(systemName: symbol)
@@ -153,7 +153,7 @@ struct NotchView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         // The watch's own name (e.g. "Sam's Apple Watch"), then what it is.
-                        Text(live.phoneName ?? live.watch.map { $0.name.isEmpty ? $0.modelName : $0.name } ?? "Waiting for a device")
+                        Text(live.phoneName ?? live.watch.map { $0.name.isEmpty ? $0.modelName : $0.name } ?? String(localized: "Waiting for a device"))
                             .font(.system(size: 13, weight: .semibold)).lineLimit(1)
                         Circle().fill(status).frame(width: 6, height: 6)
                     }
@@ -167,8 +167,8 @@ struct NotchView: View {
                 }
                 .padding(.bottom, 2)
                 if live.phoneName != nil {
-                    stat("cursorarrow", "iPhone pointer control")
-                    stat("hand.tap", "Trackpad · Air Mouse · Hybrid")
+                    stat("cursorarrow", String(localized: "iPhone pointer control"))
+                    stat("hand.tap", String(localized: "Trackpad · Air Mouse · Hybrid"))
                 } else {
                     stat("arrow.left.and.right", live.phase == .live ? String(format: "%+.1f°", -live.aimLeft) : "–")
                     stat("arrow.up.and.down", live.phase == .live ? String(format: "%+.1f°", live.aimUp) : "–")

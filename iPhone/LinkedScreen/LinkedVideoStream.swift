@@ -104,7 +104,7 @@ final class LinkedVideoStream {
         guard playback == .playing else { link.send(acknowledgement); return }
         let started = ProcessInfo.processInfo.systemUptime
         guard renderer.status != .failed, let sample = decoder.sample(from: bytes) else {
-            link.close("Video playback interrupted. Resume sharing to try again.")
+            link.close(String(localized: "Video playback interrupted. Resume sharing to try again."))
             return
         }
         renderer.enqueue(sample)

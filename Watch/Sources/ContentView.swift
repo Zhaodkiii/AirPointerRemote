@@ -61,7 +61,7 @@ struct ContentView: View {
                         PadButton(symbol: pointer.paused ? "play.fill" : "pause.fill", tint: pointer.paused ? .orange : .white) {
                             pointer.togglePause()
                         }
-                        .accessibilityLabel(pointer.paused ? "Resume control" : "Pause control")
+                        .accessibilityLabel(pointer.paused ? String(localized: "Resume control") : String(localized: "Pause control"))
                     }
                     .frame(height: 52)
                 }

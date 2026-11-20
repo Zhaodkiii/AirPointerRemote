@@ -163,7 +163,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private func chooseDisplay(forcePicker: Bool) {
         listener?.cancel()
         deadline = Date().addingTimeInterval(90)
-        report?("Choose a display to share with your paired iPhone")
+        report?(String(localized: "Choose a display to share with your paired iPhone"))
         channel?.send(.init(.waiting))
         guard !forcePicker else {
             presentPicker()
@@ -232,7 +232,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         mouse.reset()
         focus.invalidate()
         lastFocus = nil
-        report?("Screen sharing paused while iPhone is in the background")
+        report?(String(localized: "Screen sharing paused while iPhone is in the background"))
     }
 
     func resumeFromBackground() {
@@ -258,7 +258,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         awaitingForegroundFrame = true
         readyAfterDrain = readyMessage
         encodeLatest()
-        report?("Screen sharing resumed")
+        report?(String(localized: "Screen sharing resumed"))
     }
 
     private var awaitingForegroundFrame = false
@@ -457,7 +457,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             readyAfterDrain = ready
         } else { channel?.send(ready) }
         deadline = Date().addingTimeInterval(10)
-        report?("Sharing " + title + " with iPhone")
+        report?(String(localized: "Sharing \(title) with iPhone"))
         stream.startCapture { [weak self] error in
             if let error {
                 DispatchQueue.main.async { [weak stream] in
@@ -815,7 +815,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { closing?.close() }
         stream?.stopCapture(completionHandler: { _ in })
         stream = nil; pending = nil; latestSample = nil; encoder = nil; channel = nil
-        report?(reason)
+        report?(Bundle.main.localizedString(forKey: reason, value: reason, table: nil))
         onEnd?()
     }
 }

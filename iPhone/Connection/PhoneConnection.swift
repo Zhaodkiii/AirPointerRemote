@@ -13,8 +13,8 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     @Published var connected = false
     @Published var bluetoothReady = false
     @Published var connecting = false
-    @Published var status = "Checking Bluetooth…"
-    @Published var macName = "Choose Your Mac"
+    @Published var status = String(localized: "Checking Bluetooth…")
+    @Published var macName = String(localized: "Choose Your Mac")
     @Published var pairingCode: String?
     @Published var changedMac: NearbyMac?
     @Published var accessibility = false
@@ -61,7 +61,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         shouldReconnect = true
         macName = mac.name
         connecting = true
-        status = "Connecting to \(mac.name)…"
+        status = String(localized: "Connecting to \(mac.name)…")
         peripheral = mac.peripheral
         mac.peripheral.delegate = self
         central.stopScan()
@@ -72,7 +72,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
 
     func confirmPairing() {
         guard pairingCode != nil else { return }
-        status = "iPhone confirmed. On your Mac, choose Codes Match — Allow for \(pairingCode ?? sessionKey.map(PhoneProtocol.code) ?? "")"
+        status = String(localized: "iPhone confirmed. On your Mac, choose Codes Match — Allow for \(pairingCode ?? sessionKey.map(PhoneProtocol.code) ?? "")")
         pairingCode = nil
         enqueue(.init(.confirm), requiresReady: false)
     }
@@ -173,7 +173,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
             return
         }
         guard commands.count < 64 else {
-            disconnect(message: "Connection is busy. Control stopped. Select your Mac to retry.")
+            disconnect(message: String(localized: "Connection is busy. Control stopped. Select your Mac to retry."))
             return
         }
         // Flush preceding motion before button transitions, preserving gesture order.
@@ -189,12 +189,12 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     private func tick() {
         let now = ProcessInfo.processInfo.systemUptime
         if connecting, now - handshakeStarted > 90 {
-            disconnect(message: "Connection timed out. Open the Mac app and try again.")
+            disconnect(message: String(localized: "Connection timed out. Open the Mac app and try again."))
             return
         }
         guard connected, foreground else { return }
         if now - lastStatus > 4 {
-            disconnect(reconnect: true, message: "Mac stopped responding. Reconnecting…")
+            disconnect(reconnect: true, message: String(localized: "Mac stopped responding. Reconnecting…"))
             return
         }
         pump()
@@ -248,7 +248,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     private func scan() {
         guard foreground, central.state == .poweredOn, peripheral == nil else { return }
         central.scanForPeripherals(withServices: [CBUUID(string: PhoneProtocol.service)])
-        status = "Select a nearby Mac or wait for your paired Mac."
+        status = String(localized: "Select a nearby Mac or wait for your paired Mac.")
     }
 
     private func clearSession() {
@@ -279,19 +279,19 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         #if targetEnvironment(simulator)
-        status = "Bluetooth control requires a physical iPhone."
+        status = String(localized: "Bluetooth control requires a physical iPhone.")
         #else
         bluetoothReady = central.state == .poweredOn
         guard identity != nil else {
-            status = "Could not access secure storage. Reopen the app and try again."
+            status = String(localized: "Could not access secure storage. Reopen the app and try again.")
             return
         }
         switch central.state {
         case .poweredOn: scan()
-        case .unauthorized: clearSession(); status = "Allow Bluetooth for AirPointer Remote in iPhone Settings."
-        case .poweredOff: clearSession(); status = "Turn on Bluetooth in Settings."
-        case .unsupported: clearSession(); status = "Bluetooth control is unavailable on this device."
-        default: status = "Preparing Bluetooth…"
+        case .unauthorized: clearSession(); status = String(localized: "Allow Bluetooth for AirPointer Remote in iPhone Settings.")
+        case .poweredOff: clearSession(); status = String(localized: "Turn on Bluetooth in Settings.")
+        case .unsupported: clearSession(); status = String(localized: "Bluetooth control is unavailable on this device.")
+        default: status = String(localized: "Preparing Bluetooth…")
         }
         #endif
     }
@@ -317,14 +317,14 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         guard self.peripheral === peripheral else { return }
         clearSession()
-        status = "Disconnected"
+        status = String(localized: "Disconnected")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.scan() }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard self.peripheral === peripheral else { return }
         guard error == nil, let service = peripheral.services?.first(where: { $0.uuid == CBUUID(string: PhoneProtocol.service) }) else {
-            disconnect(message: "Could not find AirPointer Remote on this Mac. Open the Mac app and try again.")
+            disconnect(message: String(localized: "Could not find AirPointer Remote on this Mac. Open the Mac app and try again."))
             return
         }
         peripheral.discoverCharacteristics([CBUUID(string: PhoneProtocol.input), CBUUID(string: PhoneProtocol.output)], for: service)
@@ -335,7 +335,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         input = service.characteristics?.first { $0.uuid == CBUUID(string: PhoneProtocol.input) }
         output = service.characteristics?.first { $0.uuid == CBUUID(string: PhoneProtocol.output) }
         guard input != nil, let output else {
-            disconnect(message: "Update AirPointer Remote on the Mac, then try again.")
+            disconnect(message: String(localized: "Update AirPointer Remote on the Mac, then try again."))
             return
         }
         peripheral.setNotifyValue(true, for: output)
@@ -343,12 +343,12 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         guard self.peripheral === peripheral else { return }
-        guard error == nil, characteristic.isNotifying else { disconnect(message: "Bluetooth setup failed. Select the Mac to retry."); return }
+        guard error == nil, characteristic.isNotifying else { disconnect(message: String(localized: "Bluetooth setup failed. Select the Mac to retry.")); return }
         guard let identity else { return }
         let hello = PhoneProtocol.Hello(name: UIDevice.current.name, publicKey: identity.publicKey.rawRepresentation, nonce: PhoneProtocol.nonce())
         clientHello = hello
         guard let data = try? JSONEncoder().encode(hello) else { return }
-        status = "Waiting for the Mac pairing code…"
+        status = String(localized: "Waiting for the Mac pairing code…")
         print("Pairing: subscribed to Mac notifications; sending iPhone hello.")
         queueReliable(Data([1]) + data)
     }
@@ -356,7 +356,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         guard self.peripheral === peripheral else { return }
         writing = false
-        guard error == nil else { disconnect(reconnect: true, message: "Bluetooth was interrupted. Reconnecting…"); return }
+        guard error == nil else { disconnect(reconnect: true, message: String(localized: "Bluetooth was interrupted. Reconnecting…")); return }
         if chunks.isEmpty, sessionKey == nil, clientHello != nil, !readingHandshake,
            let output, output.properties.contains(.read) {
             readingHandshake = true
@@ -387,7 +387,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
             if let pin = PhoneKeychain.read(account), pin != server.publicKey {
                 print("Pairing: saved Mac identity differs; asking the user to re-pair.")
                 changedMac = NearbyMac(peripheral: peripheral, name: macName)
-                disconnect(message: "This Mac’s identity has changed. Re-pair only if this is your Mac.")
+                disconnect(message: String(localized: "This Mac’s identity has changed. Re-pair only if this is your Mac."))
                 return
             }
             serverHello = server
@@ -396,7 +396,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
             macName = server.name
             handshakeStarted = ProcessInfo.processInfo.systemUptime
             pairingCode = PhoneProtocol.code(key)
-            status = "Compare the codes on your iPhone and Mac."
+            status = String(localized: "Compare the codes on your iPhone and Mac.")
             // A saved pin authenticates a reconnect without another pairing dialog.
             if PhoneKeychain.read(account) == server.publicKey { confirmPairing() }
             return
@@ -413,7 +413,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
             if !connected {
                 guard let serverHello else { return }
                 guard PhoneKeychain.save(serverHello.publicKey, account: "mac." + peripheral.identifier.uuidString) else {
-                    disconnect(message: "Could not save this pairing on iPhone. Try again.")
+                    disconnect(message: String(localized: "Could not save this pairing on iPhone. Try again."))
                     return
                 }
                 UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: "phone.macID")
@@ -424,11 +424,11 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
             connected = true
             connecting = false
             pairingCode = nil
-            status = update.paused ? "Control is paused. If paused on the Mac, resume from its menu bar." : update.accessibility ? "Connected. You can control the pointer." : "On the Mac, allow AirPointer Remote in System Settings → Privacy & Security → Accessibility."
-        case "timeout": disconnect(reconnect: true, message: "Waiting for the paired Mac to wake…")
+            status = update.paused ? String(localized: "Control is paused. If paused on the Mac, resume from its menu bar.") : update.accessibility ? String(localized: "Connected. You can control the pointer.") : String(localized: "On the Mac, allow AirPointer Remote in System Settings → Privacy & Security → Accessibility.")
+        case "timeout": disconnect(reconnect: true, message: String(localized: "Waiting for the paired Mac to wake…"))
         case "confirm": break
         default:
-            disconnect(message: update.state == "denied" ? "Pairing was declined on the Mac." : "Control stopped. Select the Mac to reconnect.")
+            disconnect(message: update.state == "denied" ? String(localized: "Pairing was declined on the Mac.") : String(localized: "Control stopped. Select the Mac to reconnect."))
         }
     }
 }

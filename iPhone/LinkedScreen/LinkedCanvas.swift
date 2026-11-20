@@ -71,7 +71,7 @@ struct LinkedCanvas: UIViewRepresentable {
         if surface == .trackpad {
             view.backgroundColor = .secondarySystemGroupedBackground
             view.layer.cornerRadius = 18
-            view.accessibilityLabel = "Mac trackpad"
+            view.accessibilityLabel = String(localized: "Mac trackpad")
         } else { view.layer.addSublayer(client.video) }
         return view
     }
@@ -107,7 +107,7 @@ struct LinkedCanvas: UIViewRepresentable {
             isMultipleTouchEnabled = true
             clipsToBounds = true
             backgroundColor = .black
-            accessibilityLabel = "Shared Mac display"
+            accessibilityLabel = String(localized: "Shared Mac display")
             let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
             let twice = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
             twice.numberOfTapsRequired = 2

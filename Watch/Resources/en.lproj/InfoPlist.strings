@@ -1,0 +1,2 @@
+"NSBluetoothAlwaysUsageDescription" = "Sends pointer movement to your Mac.";
+"NSMotionUsageDescription" = "Uses wrist motion to point at your Mac.";

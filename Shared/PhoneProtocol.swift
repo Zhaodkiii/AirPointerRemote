@@ -184,7 +184,7 @@ enum PhoneKeychain {
         let key = Curve25519.KeyAgreement.PrivateKey()
         guard save(key.rawRepresentation, account: "identity") else {
             throw NSError(domain: "AirPointerRemote.Keychain", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "无法保存设备身份，请检查 App 签名和钥匙串访问权限"])
+                userInfo: [NSLocalizedDescriptionKey: String(localized: "Could not save the device identity. Check app signing and keychain access.")])
         }
         return key
     }

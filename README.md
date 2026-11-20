@@ -14,6 +14,19 @@
 
 Mac 的 Debug 配置沿用开发版的鼠标控制方式。Release 配置启用了 App Sandbox 和蓝牙设备权限，用于验证 Mac App Store 分发版。发布前要用带签名的 Release 构建在真机上检查蓝牙发现、配对、全系统移动、点击、拖动和滚动。在 Xcode 的 Mac Scheme 中把 Run 的 Build Configuration 切到 Release 就能测试这份配置。
 
+## 项目目录
+
+| 目录 | 内容 |
+| --- | --- |
+| `iPhone/` | `App` 应用入口和首页、`Connection` 配对和连接、`Remote` 指针控制、`LinkedScreen` 屏幕共享、`Setup` 安装引导 |
+| `Mac/` | `App` 接收端入口、`Connection` 设备连接、`Input` 指针和显示器坐标、`Interface` 菜单栏和浮层、`LinkedScreen` 屏幕采集和编码 |
+| `Watch/` | `Sources` 手表遥控界面和连接逻辑 |
+| `Shared/` | iPhone 与 Mac 共用的配对协议和屏幕共享传输 |
+| 各平台的 `Resources/` | 图标、隐私清单和本地化。iPhone 额外包含安装动画和脚本生成的 Mac 安装包 |
+| `Config/` | Xcode 使用的 Info.plist 配置 |
+| `Tests/`、`scripts/` | 协议与图传检查、Mac 安装包构建 |
+| `docs/`、`Game/` | 项目文档与演示素材、独立网页游戏 |
+
 ## App Store 分发
 
 1. 核对三个 Target 的 Apple Developer Team，并在开发者账号中注册主 Bundle ID 与 Watch Bundle ID。提交前可在项目级设置里统一修改 `AIRPOINTER_BUNDLE_ID`。
@@ -39,7 +52,7 @@ AIRPOINTER_NOTARY_PROFILE=AirPointerNotary ./scripts/build-mac-dmg.sh
 
 `AirPointerNotary` 是示例名称。首次可运行 `xcrun notarytool store-credentials AirPointerNotary`，按交互提示配置团队认证。脚本会验证 DMG 的公证票据和包内 App 的签名，并输出带版本号和构建号的安装包路径。用户打开 DMG，将 AirPointer Remote 拖入 Applications，再从 Applications 打开，菜单栏会显示接收端图标。
 
-脚本验证通过后，也将相同的 DMG 更新到 `iPhone/AirPointer Remote for Mac.dmg`。随后重新构建 iPhone App，即可在 **Choose Your Mac** 页面通过 **Share Mac Installer** 打开系统分享面板。例如，选择 AirDrop 将文件传到 Mac，再手动安装和开启接收端。已安装的 iPhone 版本随下一次构建和安装取得新 DMG。
+脚本验证通过后，也将相同的 DMG 更新到 `iPhone/Resources/AirPointer Remote for Mac.dmg`。随后重新构建 iPhone App，即可在 **Choose Your Mac** 页面进入 **Set Up Your Mac**，再点 **Share Mac Installer** 打开系统分享面板。例如，选择 AirDrop 将文件传到 Mac，再手动安装和开启接收端。已安装的 iPhone 版本随下一次构建和安装取得新 DMG。
 
 ## 开发检查
 

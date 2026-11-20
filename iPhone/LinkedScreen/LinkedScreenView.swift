@@ -14,7 +14,7 @@ struct LinkedScreenView: View {
                 } else {
                     Spacer()
                     Image(systemName: "display").font(.system(size: 48, weight: .light))
-                    Text(connection.connected || client.canRetrySharing ? connection.macName : "Connect to your Mac first").font(.headline)
+                    Text(connection.connected || client.canRetrySharing ? connection.macName : String(localized: "Connect to your Mac first")).font(.headline)
                     Text(client.status).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     if client.resumeMac != nil && !connection.connected {
                         Text("Open the Mac lid or wake its external display. Sharing will be requested when the paired Mac reconnects.")
@@ -31,14 +31,14 @@ struct LinkedScreenView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center).padding(.horizontal)
                         }
-                        Button(client.canRetrySharing ? "Resume Sharing" : "Start Sharing") { client.start(connection) }
+                        Button(client.canRetrySharing ? String(localized: "Resume Sharing") : String(localized: "Start Sharing")) { client.start(connection) }
                             .buttonStyle(.borderedProminent).disabled(connection.macPaused)
                         if connection.macPaused { Text("Resume pointer control to share.").font(.caption) }
                     } else { Button("Back to Pairing") { dismiss() } }
                     Spacer()
                 }
             }
-            .navigationTitle(client.live ? client.status : "Linked Screen")
+            .navigationTitle(client.live ? client.status : String(localized: "Linked Screen"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { client.end(); dismiss() } }
@@ -127,7 +127,7 @@ struct LinkedWorkspace: View {
         Menu {
             Toggle("Direct Touch", isOn: $client.directTouch)
             if !direct {
-                Button(fullScreen ? "Show Trackpad" : "Full Screen") { client.fullScreen.toggle() }
+                Button(fullScreen ? String(localized: "Show Trackpad") : String(localized: "Full Screen")) { client.fullScreen.toggle() }
             }
             if direct {
                 Toggle("Drag on Display", isOn: $drag)
@@ -254,7 +254,7 @@ struct LinkedWorkspace: View {
                         .padding(.horizontal, 12)
                         if !client.editing {
                             HStack(spacing: 8) {
-                                HoldControl(title: "Left Click", enabled: client.canPoint, cancelled: { releaseLeft() }) { down in
+                                HoldControl(title: String(localized: "Left Click"), enabled: client.canPoint, cancelled: { releaseLeft() }) { down in
                                     if down && !leftHeld {
                                         leftHeld = true
                                         client.control(.init(.currentDown))
@@ -279,7 +279,7 @@ struct LinkedWorkspace: View {
         Button {
             client.fullScreen.toggle()
         } label: {
-            Label(fullScreen ? "Show Trackpad" : "Full Screen",
+            Label(fullScreen ? String(localized: "Show Trackpad") : String(localized: "Full Screen"),
                   systemImage: fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                 .font(.subheadline.weight(.medium))
                 .frame(minHeight: 44)
@@ -339,7 +339,7 @@ struct LinkedWorkspace: View {
                         .background(client.canInsert ? Color.accentColor : Color.secondary.opacity(0.45), in: Circle())
                         .frame(width: 44, height: 44)
                 }.disabled(!client.canInsert)
-                    .accessibilityLabel(client.selectionID == nil ? "Insert on Mac" : "Replace Mac selection")
+                    .accessibilityLabel(client.selectionID == nil ? String(localized: "Insert on Mac") : String(localized: "Replace Mac selection"))
             }
         }
         .buttonStyle(.plain)

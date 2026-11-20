@@ -17,7 +17,7 @@ struct WatchInfo: Decodable, Equatable {
     var subtitle: String {
         let parts = variant.components(separatedBy: ", ")
         let size = parts.first { $0.hasSuffix("mm") }
-        let radio = variant.contains("Cellular") ? "Cellular" : nil
+        let radio = variant.contains("Cellular") ? String(localized: "Cellular") : nil
         return [size, radio, "watchOS \(os)"].compactMap { $0 }.joined(separator: " · ")
     }
 

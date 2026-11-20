@@ -4,7 +4,7 @@ import UIKit
 
 final class LinkedClient: ObservableObject {
     enum Workspace { case inline, linkedScreen }
-    @Published private(set) var status = "Connect to your Mac, then start sharing."
+    @Published private(set) var status = String(localized: "Connect to your Mac, then start sharing.")
     @Published private(set) var running = false
     @Published private(set) var live = false
     @Published private(set) var size = CGSize(width: 16, height: 9)
@@ -36,7 +36,7 @@ final class LinkedClient: ObservableObject {
     private var browser: NWBrowser?
     private var timeout: Timer?
     private var deadline = Date()
-    private(set) var displayName = "Mac display"
+    private(set) var displayName = String(localized: "Mac display")
     private var uiActive: Bool { sceneIsActive && workspacePresented && pipState == .idle }
     private(set) var sceneIsActive = true
     private(set) var sceneInBackground = false
@@ -101,13 +101,13 @@ final class LinkedClient: ObservableObject {
         self.phone = phone
         sessionMac = phone.connectedMacID
         running = true
-        status = "Finding your Mac on the local network…"
+        status = String(localized: "Finding your Mac on the local network…")
         deadline = Date().addingTimeInterval(30)
         let browser = NWBrowser(for: .bonjour(type: LinkedOffer.service, domain: nil), using: .tcp)
         self.browser = browser
         browser.stateUpdateHandler = { [weak self, weak browser] state in
             guard let self, let browser, self.browser === browser else { return }
-            if case .waiting(let error) = state { self.status = "Check Local Network access and Wi-Fi. " + error.localizedDescription }
+            if case .waiting(let error) = state { self.status = String(localized: "Check Local Network access and Wi-Fi. ") + error.localizedDescription }
             if case .failed(let error) = state { self.end(error.localizedDescription) }
         }
         browser.browseResultsChangedHandler = { [weak self, weak browser] results, _ in
@@ -125,7 +125,7 @@ final class LinkedClient: ObservableObject {
             guard let self else { return }
             guard pausedAt == nil else { return }
             guard Date() > deadline else { return }
-            interrupted(live ? "Mac stopped responding. Start sharing again." : "Timed out. Check both apps, Local Network access and Wi-Fi, then retry.")
+            interrupted(live ? String(localized: "Mac stopped responding. Start sharing again.") : String(localized: "Timed out. Check both apps, Local Network access and Wi-Fi, then retry."))
         }
     }
 
@@ -154,16 +154,16 @@ final class LinkedClient: ObservableObject {
         switch message.kind {
         case .waiting:
             deadline = Date().addingTimeInterval(95)
-            status = "Choose the display to share on your Mac."
+            status = String(localized: "Choose the display to share on your Mac.")
         case .ready:
             supportsGestures = message.supportsGestures == true
             pipSupportedByMac = message.pictureInPicture == true
             guard pausedAt == nil else { return }
             phone?.linkedCanSuspend = message.backgroundResume == true
             if awake { channel?.send(.init(.keepAwake, x: 1)) }
-            guard message.x > 0, message.y > 0 else { end("Invalid display size."); return }
+            guard message.x > 0, message.y > 0 else { end(String(localized: "Invalid display size.")); return }
             let nextSize = CGSize(width: message.x, height: message.y)
-            let nextName = message.text ?? "Mac display"
+            let nextName = message.text.flatMap { $0 == "Mac display" ? nil : $0 } ?? String(localized: "Mac display")
             if nextSize != size || nextName != displayName { fitPreview() }
             size = nextSize
             displayName = nextName
@@ -176,7 +176,7 @@ final class LinkedClient: ObservableObject {
             if videoDelayed != delayed { videoDelayed = delayed }
             let quality = message.videoBitrate.flatMap { bitrate in
                 message.videoFPS.map { fps in
-                    String(format: "%.1f Mbps · up to %d FPS", Double(bitrate) / 1_000_000, fps)
+                    String(format: String(localized: "%.1f Mbps · up to %d FPS"), Double(bitrate) / 1_000_000, fps)
                 }
             }
             if videoQuality != quality { videoQuality = quality }
@@ -189,7 +189,7 @@ final class LinkedClient: ObservableObject {
             if draft.isEmpty && selectionID == nil {
                 target = focus
             } else if target != focus {
-                editorHint = "Focus changed. Confirm the new Mac field before inserting."
+                editorHint = String(localized: "Focus changed. Confirm the new Mac field before inserting.")
             }
             if focus == nil {
                 // Focus can briefly clear while a user click moves between fields.
@@ -209,17 +209,17 @@ final class LinkedClient: ObservableObject {
             if readingSelection {
                 readingSelection = false
                 guard message.kind == .inserted, message.token == focus, let id = message.selection,
-                      let text = message.text else { editorHint = "Select text on the Mac, then try again."; return }
+                      let text = message.text else { editorHint = String(localized: "Select text on the Mac, then try again."); return }
                 target = focus
                 selectionID = id
                 draft = text
                 richEditor.attributedText = MacDraftEditor.attributed(text, styles: message.styles ?? [])
                 richEditor.selectedRange = NSRange(location: (text as NSString).length, length: 0)
-                editorHint = "Editing selected text"
+                editorHint = String(localized: "Editing selected text")
                 return
             }
-            if message.kind == .inserted { cancelDraft(); status = "Text sent to the selected Mac field." }
-            else { editorHint = "Edit rejected. Check the Mac field and selection." }
+            if message.kind == .inserted { cancelDraft(); status = String(localized: "Text sent to the selected Mac field.") }
+            else { editorHint = String(localized: "Edit rejected. Check the Mac field and selection.") }
         case .stop:
             let reason = message.text ?? "Sharing ended."
             if message.x == 1 { interrupted(reason) } else { end(reason, keepDraft: resuming || pausedAt != nil) }
@@ -246,7 +246,7 @@ final class LinkedClient: ObservableObject {
     private func pauseForBackground() {
         guard running, pausedAt == nil else { return }
         guard (live || resuming), phone?.linkedCanSuspend == true else {
-            end("Sharing paused. Resume when you’re ready.", keepDraft: true)
+            end(String(localized: "Sharing paused. Resume when you’re ready."), keepDraft: true)
             return
         }
         pausedAt = ProcessInfo.processInfo.systemUptime
@@ -258,25 +258,25 @@ final class LinkedClient: ObservableObject {
         target = nil
         selectionID = nil
         richEditor.resignFirstResponder()
-        status = "Screen sharing paused."
+        status = String(localized: "Screen sharing paused.")
     }
 
     private func resumeFromBackground() {
         guard let pausedAt else { return }
         self.pausedAt = nil
         guard ProcessInfo.processInfo.systemUptime - pausedAt < PhoneProtocol.LinkedLifecycle.grace else {
-            end("Sharing paused too long. Choose a display to share again.", keepDraft: true)
+            end(String(localized: "Sharing paused too long. Choose a display to share again."), keepDraft: true)
             return
         }
         deadline = Date().addingTimeInterval(8)
         channel?.awaitFreshFrame()
-        status = "Restoring the shared display…"
+        status = String(localized: "Restoring the shared display…")
         if submitting != nil {
             submitting = nil
             readingSelection = false
-            editorHint = "Check the Mac before submitting this draft again."
+            editorHint = String(localized: "Check the Mac before submitting this draft again.")
         } else if !draft.isEmpty {
-            editorHint = "Confirm the Mac field before inserting your draft."
+            editorHint = String(localized: "Confirm the Mac field before inserting your draft.")
         }
     }
 
@@ -291,13 +291,13 @@ final class LinkedClient: ObservableObject {
     private var sessionMac: UUID?
     func connectionChanged(_ phone: PhoneConnection) {
         if !phone.connected {
-            interrupted("Connection to the Mac was interrupted.")
+            interrupted(String(localized: "Connection to the Mac was interrupted."))
         } else if let resumeMac, phone.connectedMacID == resumeMac, !phone.macPaused, uiActive {
             start(phone, inline: inlineRequest)
         }
     }
 
-    func end(_ reason: String = "Sharing ended.", keepDraft: Bool = false) {
+    func end(_ reason: String = String(localized: "Sharing ended."), keepDraft: Bool = false) {
         resumeMac = nil
         sessionMac = nil
         canRetrySharing = keepDraft
@@ -315,7 +315,7 @@ final class LinkedClient: ObservableObject {
         pausedAt = nil
         resuming = false
         running = false; live = false
-        status = submitting == nil ? reason : "Sharing ended. Check the Mac before inserting again."
+        status = submitting == nil ? Bundle.main.localizedString(forKey: reason, value: reason, table: nil) : String(localized: "Sharing ended. Check the Mac before inserting again.")
         browser?.cancel(); browser = nil
         timeout?.invalidate(); timeout = nil
         channel?.close(); channel = nil
@@ -328,7 +328,7 @@ final class LinkedClient: ObservableObject {
             target = nil
             selectionID = nil
             readingSelection = false
-            editorHint = "Confirm the Mac field before inserting your draft."
+            editorHint = String(localized: "Confirm the Mac field before inserting your draft.")
         } else { cancelDraft() }
     }
 
@@ -414,10 +414,10 @@ final class LinkedClient: ObservableObject {
         if deleting {
             guard uiActive, let target, target == focus, selectionID != nil, submitting == nil, live, canPoint else { return }
         } else { guard canInsert else { return } }
-        guard richEditor.markedTextRange == nil else { editorHint = "Finish composing the current word first."; return }
+        guard richEditor.markedTextRange == nil else { editorHint = String(localized: "Finish composing the current word first."); return }
         let styles = deleting ? [] : MacDraftEditor.styles(in: richEditor.attributedText)
-        guard styles.count <= 512 else { editorHint = "Too many formatting changes. Split this edit."; return }
-        guard supportsEditing || styles.isEmpty else { editorHint = "Update the Mac receiver for formatted text."; return }
+        guard styles.count <= 512 else { editorHint = String(localized: "Too many formatting changes. Split this edit."); return }
+        guard supportsEditing || styles.isEmpty else { editorHint = String(localized: "Update the Mac receiver for formatted text."); return }
         let id = UUID()
         var command = LinkedMessage(.insert, token: target, request: id, text: deleting ? "" : draft)
         command.styles = styles.isEmpty ? nil : styles

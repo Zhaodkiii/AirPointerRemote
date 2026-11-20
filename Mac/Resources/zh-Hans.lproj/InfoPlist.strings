@@ -1,0 +1,2 @@
+"NSBluetoothAlwaysUsageDescription" = "通过蓝牙接收 iPhone 或 Apple Watch 的鼠标操作。";
+"NSLocalNetworkUsageDescription" = "通过本地网络连接已配对的 iPhone 和 Mac，以共享 Mac 屏幕。";

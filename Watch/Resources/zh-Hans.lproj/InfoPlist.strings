@@ -1,0 +1,2 @@
+"NSBluetoothAlwaysUsageDescription" = "通过蓝牙将指针移动发送到 Mac。";
+"NSMotionUsageDescription" = "使用手腕动作控制 Mac 指针。";

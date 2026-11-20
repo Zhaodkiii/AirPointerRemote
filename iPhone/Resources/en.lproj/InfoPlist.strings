@@ -1,0 +1,3 @@
+"NSBluetoothAlwaysUsageDescription" = "Connects to your Mac to control its mouse.";
+"NSLocalNetworkUsageDescription" = "Connects your paired iPhone and Mac to share the display over your local network.";
+"NSMotionUsageDescription" = "Uses phone rotation to control the Mac pointer.";

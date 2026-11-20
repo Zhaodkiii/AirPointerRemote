@@ -197,14 +197,14 @@ final class RemoteController: ObservableObject {
         resetAir()
         guard foreground, !interactionSuspended, connection.connected, mode != .trackpad else { return }
         guard motion.isDeviceMotionAvailable else {
-            motionMessage = "Motion control is unavailable on this device. Use Trackpad mode."
+            motionMessage = String(localized: "Motion control is unavailable on this device. Use Trackpad mode.")
             return
         }
         motionMessage = nil
         motion.deviceMotionUpdateInterval = 0.01
         motion.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: .main) { [weak self] data, error in
             guard let self else { return }
-            if let error { self.motionMessage = "Motion control is unavailable: \(error.localizedDescription)"; return }
+            if let error { self.motionMessage = String(localized: "Motion control is unavailable: \(error.localizedDescription)"); return }
             guard let data, self.airActive else { self.resetAir(); return }
             let q = data.attitude.quaternion
             let orientation = simd_quatd(ix: q.x, iy: q.y, iz: q.z, r: q.w)

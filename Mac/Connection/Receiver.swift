@@ -199,14 +199,14 @@ final class Receiver: NSObject, CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         if let error {
             print("Bluetooth service error: \(error)")
-            DispatchQueue.main.async { self.onPhoneState?("Bluetooth could not start. Reopen AirPointer Remote.") }
+            DispatchQueue.main.async { self.onPhoneState?(String(localized: "Bluetooth could not start. Reopen AirPointer Remote.")) }
             return
         }
         // The Mac's own name ("Sam's MacBook Pro"), so the watch's pairing list says which Mac this is.
         let name = String((Host.current().localizedName ?? "Mac").prefix(24))
         peripheral.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [serviceUUID],
                                      CBAdvertisementDataLocalNameKey: name])
-        print("Advertising. Open AirPointer Remote on your iPhone or Apple Watch.")
+        print(String(localized: "Advertising. Open AirPointer Remote on your iPhone or Apple Watch."))
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
@@ -290,10 +290,10 @@ final class Receiver: NSObject, CBPeripheralManagerDelegate {
             watchPrompt = id
             DispatchQueue.main.async {
                 let alert = NSAlert()
-                alert.messageText = "Allow Apple Watch to control the pointer?"
-                alert.informativeText = "Allow only if you just selected this Mac on your nearby Apple Watch. This approval lasts for this connection."
-                alert.addButton(withTitle: "Allow This Connection")
-                alert.addButton(withTitle: "Decline")
+                alert.messageText = String(localized: "Allow Apple Watch to control the pointer?")
+                alert.informativeText = String(localized: "Allow only if you just selected this Mac on your nearby Apple Watch. This approval lasts for this connection.")
+                alert.addButton(withTitle: String(localized: "Allow This Connection"))
+                alert.addButton(withTitle: String(localized: "Decline"))
                 NSApp.activate(ignoringOtherApps: true)
                 let allowed = alert.runModal() == .alertFirstButtonReturn
                 self.queue.async {

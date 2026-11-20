@@ -73,7 +73,7 @@ fi
 
 echo "Creating the Finder installation window…"
 tools_dir="$output_dir/dmgbuild-1.6.7"
-if [[ ! -x "$tools_dir/bin/dmgbuild" ]]; then
+if ! "$tools_dir/bin/python" -c "import dmgbuild" >/dev/null 2>&1; then
     echo "Installing dmgbuild in the local build directory…"
     python3 -m venv "$tools_dir"
     "$tools_dir/bin/python" -m pip install --disable-pip-version-check 'dmgbuild==1.6.7'
@@ -83,7 +83,7 @@ ditto "$app" "$work_dir/contents/AirPointer Remote.app"
 xcrun swift "$project_dir/scripts/dmg-background.swift" "$work_dir/install.png"
 filename="AirPointer-Remote-${version}-${build}-macOS${suffix}.dmg"
 image="$work_dir/$filename"
-"$tools_dir/bin/dmgbuild" -s "$project_dir/scripts/dmg-layout.py" \
+"$tools_dir/bin/python" -m dmgbuild -s "$project_dir/scripts/dmg-layout.py" \
     -D "app=$work_dir/contents/AirPointer Remote.app" -D "background=$work_dir/install.png" \
     'AirPointer Remote' "$image"
 codesign --sign "$signing_identity" --identifier "$bundle_id.dmg" --timestamp "$image"
@@ -126,7 +126,7 @@ hdiutil detach -quiet "$mounted"
 mounted=""
 
 # Replace the generated iPhone resource only after the new image passes verification.
-installer="$project_dir/iPhone/AirPointer Remote for Mac.dmg"
+installer="$project_dir/iPhone/Resources/AirPointer Remote for Mac.dmg"
 cp "$image" "$work_dir/embedded.dmg"
 mv -f "$image" "$output_dir/$filename"
 mv -f "$work_dir/embedded.dmg" "$installer"

@@ -1,6 +1,4 @@
-import CoreTransferable
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct ContentView: View {
     @ObservedObject var controller: RemoteController
@@ -12,6 +10,7 @@ struct ContentView: View {
     @AppStorage("linked.autoPictureInPicture") private var automaticPiP = true
     @State private var settings = false
     @State private var showHelp = false
+    @State private var showSetup = false
     @State private var confirmNewIdentity = false
 
     @AppStorage("pad.zoom") private var zoomGesture = true
@@ -70,6 +69,7 @@ struct ContentView: View {
                 let inline = $inlineRequested
                 let preferences = $settings
                 let help = $showHelp
+                let setup = $showSetup
                 sharing.minimizeForPictureInPicture = {
                     inline.wrappedValue = false
                     cover.wrappedValue = false
@@ -77,6 +77,7 @@ struct ContentView: View {
                 sharing.showPictureInPictureWorkspace = { workspace in
                     preferences.wrappedValue = false
                     help.wrappedValue = false
+                    setup.wrappedValue = false
                     inline.wrappedValue = workspace == .inline
                     cover.wrappedValue = workspace == .linkedScreen
                 }
@@ -85,7 +86,7 @@ struct ContentView: View {
             .onChange(of: linkedScreen) { _, _ in updateSharingPresentation() }
             .onChange(of: sharing.pipState) { _, _ in updateSharingPresentation() }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in
-                if sharing.pipState != .idle { sharing.end("Sharing stopped when iPhone locked.", keepDraft: true) }
+                if sharing.pipState != .idle { sharing.end(String(localized: "Sharing stopped when iPhone locked."), keepDraft: true) }
             }
             .onChange(of: sharing.pipSupportedByMac) { _, _ in updateSharingPresentation() }
             .onChange(of: automaticPiP) { _, _ in updateSharingPresentation() }
@@ -103,15 +104,20 @@ struct ContentView: View {
                 if live && linkedScreen { connection.send(.init(.linkedInput)) }
             }
             .onChange(of: settings) { _, _ in updateSharingPresentation() }
+            .onChange(of: showSetup) { _, _ in updateSharingPresentation() }
             .onChange(of: showHelp) { _, _ in updateSharingPresentation() }
             .onChange(of: connection.connected) { _, _ in sharing.connectionChanged(connection) }
             .onChange(of: connection.macPaused) { _, paused in
-                if paused { sharing.end("Control paused on the Mac.") }
+                if paused { sharing.end(String(localized: "Control paused on the Mac.")) }
             }
             .onChange(of: phase, initial: true) { _, phase in
                 sharing.sceneChanged(active: phase == .active, background: phase == .background, controller: controller)
             }
             .sheet(isPresented: $settings) { settingsView }
+            .sheet(isPresented: $showSetup) {
+                NavigationStack { setupGuide }
+                    .presentationDragIndicator(.visible)
+            }
             .sheet(isPresented: $showHelp) { helpView }
             .confirmationDialog("Replace saved Mac pairing?", isPresented: $confirmNewIdentity, titleVisibility: .visible) {
                 Button("Forget and Re-pair", role: .destructive) { connection.retryChangedMac() }
@@ -127,14 +133,14 @@ struct ContentView: View {
     }
 
     private func updateInputOwner() {
-        controller.suspendInteraction(linkedScreen || inlineWorkspace || sharing.pipState != .idle || settings || showHelp)
+        controller.suspendInteraction(linkedScreen || inlineWorkspace || sharing.pipState != .idle || settings || showHelp || showSetup)
     }
 
     private func updateSharingPresentation() {
         updateInputOwner()
         if linkedScreen {
             sharing.workspace = .linkedScreen
-        } else if inlineWorkspace && !settings && !showHelp {
+        } else if inlineWorkspace && !settings && !showHelp && !showSetup {
             sharing.workspace = .inline
         } else {
             sharing.workspace = nil
@@ -187,7 +193,7 @@ struct ContentView: View {
                     HStack(spacing: 4) {
                         if sharing.running && !sharing.live { ProgressView().controlSize(.small) }
                         else { Image(systemName: sharing.live ? "stop.circle.fill" : "rectangle.on.rectangle") }
-                        Text(sharing.running ? (sharing.live ? "Stop" : "Cancel") : "Share")
+                        Text(sharing.running ? (sharing.live ? String(localized: "Stop") : String(localized: "Cancel")) : String(localized: "Share"))
                     }
                     .font(.subheadline.weight(.semibold))
                     .frame(minHeight: 32)
@@ -195,7 +201,7 @@ struct ContentView: View {
                 .buttonStyle(.bordered)
                 .tint(sharing.live ? .red : .accentColor)
                 .disabled(!sharing.running && (controller.paused || connection.macPaused))
-                .accessibilityLabel(sharing.running ? "Stop inline screen sharing" : "Share screen on this page")
+                .accessibilityLabel(sharing.running ? String(localized: "Stop inline screen sharing") : String(localized: "Share screen on this page"))
                 Button {
                     if sharing.running { sharing.end(); inlineRequested = false }
                     controller.togglePause()
@@ -204,7 +210,7 @@ struct ContentView: View {
                         .frame(width: 40, height: 40)
                 }
                 .buttonStyle(.bordered)
-                .accessibilityLabel(controller.paused ? "Resume Control" : "Pause Control")
+                .accessibilityLabel(controller.paused ? String(localized: "Resume Control") : String(localized: "Pause Control"))
             }
         }
     }
@@ -250,9 +256,14 @@ struct ContentView: View {
                             .buttonStyle(.plain)
                         }
                         if connection.nearby.isEmpty && connection.bluetoothReady { Text("Looking for nearby Macs…").foregroundStyle(.secondary).padding() }
-                        if let installer = MacInstaller.bundled {
-                            macSetup(installer)
-                        }
+                        Button { showSetup = true } label: {
+                            HStack {
+                                Label("Set Up Your Mac", systemImage: "shippingbox")
+                                Spacer()
+                                Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                            }
+                            .padding().background(.background, in: RoundedRectangle(cornerRadius: 16))
+                        }.buttonStyle(.plain)
                     }
                 }
             }
@@ -263,28 +274,17 @@ struct ContentView: View {
         }
     }
 
-    private func macSetup(_ installer: MacInstaller) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Set Up Your Mac", systemImage: "laptopcomputer")
-                .font(.headline)
-            Text("AirDrop the installer to your Mac, then open it there. Requires macOS 14 or later.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            ShareLink(item: installer, preview: SharePreview("AirPointer Remote for Mac")) {
-                Label("Share Mac Installer", systemImage: "square.and.arrow.up")
-            }
-            .buttonStyle(.borderedProminent)
+    private var setupGuide: some View {
+        MacSetupGuide(connection: connection) {
+            showSetup = false
+            showHelp = false
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(.background, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var remote: some View {
         VStack(spacing: 12) {
             Picker("Control Mode", selection: $controller.mode) {
-                ForEach(RemoteController.Mode.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(RemoteController.Mode.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
             }.pickerStyle(.segmented)
             if let message = controller.motionMessage { Text(message).font(.caption).foregroundStyle(.orange) }
             if controller.mode != .trackpad {
@@ -300,9 +300,9 @@ struct ContentView: View {
                 VStack(spacing: 14) {
                     Image(systemName: controller.mode == .air ? "gyroscope" : "hand.draw")
                         .font(.system(size: 44, weight: .light))
-                    Text(controller.paused || connection.macPaused ? "Control is paused" : controller.mode == .air ? "Hold Move and tilt your iPhone" : "One finger to move · Two to scroll")
+                    Text(controller.paused || connection.macPaused ? String(localized: "Control is paused") : controller.mode == .air ? String(localized: "Hold Move and tilt your iPhone") : String(localized: "One finger to move · Two to scroll"))
                         .font(.headline)
-                    Text(controller.mode == .hybrid ? "Hold Move to aim. Release for touch control." : controller.mode == .air ? "Point the top of your iPhone at the Mac." : "Tap to click · Two-finger tap to right-click")
+                    Text(controller.mode == .hybrid ? String(localized: "Hold Move to aim. Release for touch control.") : controller.mode == .air ? String(localized: "Point the top of your iPhone at the Mac.") : String(localized: "Tap to click · Two-finger tap to right-click"))
                         .font(.footnote)
                 }
                 .foregroundStyle(.secondary)
@@ -316,9 +316,9 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             HStack(spacing: 10) {
-                HoldControl(title: "Left Click", enabled: controller.canControl) { controller.left($0, source: "button") }
+                HoldControl(title: String(localized: "Left Click"), enabled: controller.canControl) { controller.left($0, source: "button") }
                 if controller.mode != .trackpad {
-                    HoldControl(title: controller.airHeld ? "Moving" : "Hold to Move", enabled: controller.canControl) { controller.setAirHeld($0) }
+                    HoldControl(title: controller.airHeld ? String(localized: "Moving") : String(localized: "Hold to Move"), enabled: controller.canControl) { controller.setAirHeld($0) }
                 }
                 Button { controller.click(right: true) } label: {
                     Text("Right Click").font(.system(size: 16, weight: .semibold)).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -326,7 +326,7 @@ struct ContentView: View {
                 }.buttonStyle(.plain).disabled(!controller.canControl)
             }.frame(height: 68)
             HStack {
-                HoldControl(title: "Hold for Precision", enabled: controller.canControl) { controller.precise = $0 }
+                HoldControl(title: String(localized: "Hold for Precision"), enabled: controller.canControl) { controller.precise = $0 }
                 Button("Disconnect") { controller.stop(); connection.disconnect() }.buttonStyle(.bordered)
             }.frame(height: 44)
         }
@@ -367,6 +367,7 @@ struct ContentView: View {
     private var helpView: some View {
         NavigationStack {
             List {
+                Section { NavigationLink("Mac Setup Guide") { setupGuide } }
                 Section("Trackpad") {
                     Text("Slide one finger to move the pointer. Tap to click, double-tap to double-click, or tap with two fingers to right-click.")
                     Text("Slide two fingers to scroll. To drag, hold Left Click while moving another finger on the trackpad, or tap once and then touch and hold.")
@@ -389,22 +390,6 @@ struct ContentView: View {
             }
             .navigationTitle("How to Use")
             .toolbar { Button("Done") { showHelp = false } }
-        }
-    }
-}
-
-
-private struct MacInstaller: Transferable {
-    let url: URL
-
-    static var bundled: MacInstaller? {
-        Bundle.main.url(forResource: "AirPointer Remote for Mac", withExtension: "dmg")
-            .map(MacInstaller.init)
-    }
-
-    static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(exportedContentType: UTType(filenameExtension: "dmg") ?? .data) { installer in
-            SentTransferredFile(installer.url)
         }
     }
 }

@@ -7,7 +7,7 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
     private var forgetItem: NSMenuItem!
     private let receiver: Receiver
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private let status = NSMenuItem(title: "Waiting for a device", action: nil, keyEquivalent: "")
+    private let status = NSMenuItem(title: String(localized: "Waiting for a device"), action: nil, keyEquivalent: "")
     private let accessibilityItem = NSMenuItem(title: "", action: #selector(openAccessibility), keyEquivalent: "")
     private let screenRecordingItem = NSMenuItem(title: "", action: #selector(openScreenRecording), keyEquivalent: "")
     private let bluetoothItem = NSMenuItem(title: "", action: #selector(openBluetooth), keyEquivalent: "")
@@ -27,22 +27,22 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
             permissionItem.target = self
             menu.addItem(permissionItem)
         }
-        add("Show Running App in Finder", #selector(revealRunningApp), to: menu)
-        add("Connection Help…", #selector(showHelp), to: menu)
+        add(String(localized: "Show Running App in Finder"), #selector(revealRunningApp), to: menu)
+        add(String(localized: "Connection Help…"), #selector(showHelp), to: menu)
         menu.addItem(.separator())
-        rememberItem = add("Remember Display for This iPhone", #selector(toggleRemember), to: menu)
-        forgetItem = add("Forget All Remembered Displays", #selector(forgetDisplays), to: menu)
+        rememberItem = add(String(localized: "Remember Display for This iPhone"), #selector(toggleRemember), to: menu)
+        forgetItem = add(String(localized: "Forget All Remembered Displays"), #selector(forgetDisplays), to: menu)
         menu.delegate = self
         menu.autoenablesItems = false
         status.isEnabled = false
         menu.addItem(.separator())
-        pauseItem = add("Pause Control", #selector(togglePause(_:)), to: menu)
-        let stop = add("Stop All Control", #selector(stopControl), to: menu)
+        pauseItem = add(String(localized: "Pause Control"), #selector(togglePause(_:)), to: menu)
+        let stop = add(String(localized: "Stop All Control"), #selector(stopControl), to: menu)
         stop.keyEquivalent = "."
         stop.keyEquivalentModifierMask = [.control, .option, .command]
-        add("Revoke All iPhone Pairings", #selector(revoke), to: menu)
+        add(String(localized: "Revoke All iPhone Pairings"), #selector(revoke), to: menu)
         menu.addItem(.separator())
-        add("Quit AirPointer Remote", #selector(quit), to: menu)
+        add(String(localized: "Quit AirPointer Remote"), #selector(quit), to: menu)
         item.menu = menu
         receiver.onPhoneState = { [weak self] text in self?.status.title = text }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() }
@@ -73,18 +73,18 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
         let accessibility = CGPreflightPostEventAccess()
         let screenRecording = CGPreflightScreenCaptureAccess()
         let bluetooth = CBPeripheralManager.authorization == .allowedAlways
-        accessibilityItem.title = accessibility ? "Accessibility: Pointer Control Allowed" : "Allow Pointer Control in Accessibility…"
-        screenRecordingItem.title = screenRecording ? "Screen Recording: Access Allowed" : "Allow Screen Recording for Remembered Displays…"
-        bluetoothItem.title = bluetooth ? "Bluetooth: Access Allowed" : "Allow Bluetooth Access…"
+        accessibilityItem.title = accessibility ? String(localized: "Accessibility: Pointer Control Allowed") : String(localized: "Allow Pointer Control in Accessibility…")
+        screenRecordingItem.title = screenRecording ? String(localized: "Screen Recording: Access Allowed") : String(localized: "Allow Screen Recording for Remembered Displays…")
+        bluetoothItem.title = bluetooth ? String(localized: "Bluetooth: Access Allowed") : String(localized: "Allow Bluetooth Access…")
         accessibilityItem.isEnabled = !accessibility
         screenRecordingItem.isEnabled = !screenRecording
         bluetoothItem.isEnabled = !bluetooth
 
         var missing: [String] = []
-        if !accessibility { missing.append("Accessibility") }
-        if !bluetooth { missing.append("Bluetooth") }
-        if !screenRecording && LinkedHost.hasRememberedDisplays { missing.append("Screen Recording") }
-        let description = missing.isEmpty ? "AirPointer Remote" : "AirPointer Remote — Allow " + missing.joined(separator: ", ")
+        if !accessibility { missing.append(String(localized: "Accessibility")) }
+        if !bluetooth { missing.append(String(localized: "Bluetooth")) }
+        if !screenRecording && LinkedHost.hasRememberedDisplays { missing.append(String(localized: "Screen Recording")) }
+        let description = missing.isEmpty ? "AirPointer Remote" : String(localized: "AirPointer Remote — Allow ") + missing.joined(separator: ", ")
         item.button?.image = NSImage(systemSymbolName: missing.isEmpty ? "cursorarrow.rays" : "exclamationmark.circle",
                                      accessibilityDescription: description)
         item.button?.setAccessibilityLabel(description)
@@ -94,7 +94,7 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         refresh()
         let host = LinkedHost.sharing
-        rememberItem.title = host.map { "Remember “\($0.displayName)” for \($0.phoneName)" } ?? "Remember Display for This iPhone (Start Sharing First)"
+        rememberItem.title = host.map { String(localized: "Remember “\($0.displayName)” for \($0.phoneName)") } ?? String(localized: "Remember Display for This iPhone (Start Sharing First)")
         rememberItem.state = host?.remembersDisplay == true ? .on : .off
         rememberItem.isEnabled = host?.canRememberDisplay == true
         forgetItem.isEnabled = LinkedHost.hasRememberedDisplays
@@ -112,28 +112,28 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
 
     @objc private func showHelp() {
         let alert = NSAlert()
-        alert.messageText = "Connect an iPhone or Apple Watch"
-        alert.informativeText = "Keep AirPointer Remote running on this Mac. Turn on Bluetooth on both devices. In System Settings → Privacy & Security → Accessibility, allow AirPointer Remote to move and click the pointer. Then select this Mac on your other device and confirm the connection here."
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Open Accessibility Settings")
+        alert.messageText = String(localized: "Connect an iPhone or Apple Watch")
+        alert.informativeText = String(localized: "Keep AirPointer Remote running on this Mac. Turn on Bluetooth on both devices. In System Settings → Privacy & Security → Accessibility, allow AirPointer Remote to move and click the pointer. Then select this Mac on your other device and confirm the connection here.")
+        alert.addButton(withTitle: String(localized: "OK"))
+        alert.addButton(withTitle: String(localized: "Open Accessibility Settings"))
         NSApp.activate(ignoringOtherApps: true)
         if alert.runModal() == .alertSecondButtonReturn { openAccessibility() }
     }
 
     @objc private func openAccessibility() {
         showPermissionGuide(
-            title: "Allow pointer control on this Mac",
-            pane: "Accessibility",
-            details: "Enable AirPointer Remote to move, click, and drag the pointer from your iPhone or Apple Watch.",
+            title: String(localized: "Allow pointer control on this Mac"),
+            pane: String(localized: "Accessibility"),
+            details: String(localized: "Enable AirPointer Remote to move, click, and drag the pointer from your iPhone or Apple Watch."),
             settings: "Privacy_Accessibility"
         )
     }
 
     @objc private func openScreenRecording() {
         showPermissionGuide(
-            title: "Allow Screen Recording for remembered displays",
-            pane: "Screen & System Audio Recording",
-            details: "This lets a paired iPhone reuse a display you remembered. You can also choose a screen for an individual sharing session with the system picker.",
+            title: String(localized: "Allow Screen Recording for remembered displays"),
+            pane: String(localized: "Screen & System Audio Recording"),
+            details: String(localized: "This lets a paired iPhone reuse a display you remembered. You can also choose a screen for an individual sharing session with the system picker."),
             settings: "Privacy_ScreenCapture"
         )
     }
@@ -141,16 +141,16 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
     private func showPermissionGuide(title: String, pane: String, details: String, settings: String) {
         let alert = NSAlert()
         alert.messageText = title
-        alert.informativeText = """
+        alert.informativeText = String(localized: """
             \(details)
 
             Open System Settings → Privacy & Security → \(pane). If the switch is already on for another copy, use the − and + buttons to replace that entry with the running app, then reopen it.
 
             Running app: \(Bundle.main.bundleURL.path)
-            """
-        alert.addButton(withTitle: "Open Settings")
-        alert.addButton(withTitle: "Show App in Finder")
-        alert.addButton(withTitle: "Later")
+            """)
+        alert.addButton(withTitle: String(localized: "Open Settings"))
+        alert.addButton(withTitle: String(localized: "Show App in Finder"))
+        alert.addButton(withTitle: String(localized: "Later"))
         NSApp.activate(ignoringOtherApps: true)
         switch alert.runModal() {
         case .alertFirstButtonReturn:
@@ -170,19 +170,19 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
     }
     @objc private func togglePause(_ sender: NSMenuItem) {
         paused.toggle()
-        sender.title = paused ? "Resume Control" : "Pause Control"
+        sender.title = paused ? String(localized: "Resume Control") : String(localized: "Pause Control")
         receiver.pauseControl(paused)
     }
     @objc func stopControl() {
         paused = true
-        pauseItem?.title = "Resume Control"
+        pauseItem?.title = String(localized: "Resume Control")
         receiver.stopControl()
-        status.title = "Control stopped. Resume from this menu."
+        status.title = String(localized: "Control stopped. Resume from this menu.")
     }
     @objc private func revoke() {
         LinkedHost.forgetAllDisplays()
         receiver.revokePhones()
-        status.title = "iPhone pairings revoked."
+        status.title = String(localized: "iPhone pairings revoked.")
     }
     @objc private func quit() {
         receiver.stopControl()
