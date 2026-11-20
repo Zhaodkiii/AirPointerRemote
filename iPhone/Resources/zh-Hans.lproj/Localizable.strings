@@ -227,3 +227,37 @@
 "Zoom Out" = "缩小";
 "iPhone confirmed. On your Mac, choose Codes Match — Allow for %@" = "iPhone 已确认。请在 Mac 上核对配对码 %@，然后选择“配对码一致，允许”。";
 "iPhone stopped responding." = "iPhone 未响应。";
+
+/* Closed-Lid Desktop */
+"Preparing Lid Desktop on your Mac…" = "正在 Mac 上准备合盖桌面…";
+"Reconnecting to Lid Desktop…" = "正在重新连接合盖桌面…";
+"Ready to close the Mac lid" = "可以合上 Mac 屏幕了";
+"Lid Desktop keeps your Mac awake" = "合盖桌面会让 Mac 保持唤醒";
+"Choose a Display on the Mac" = "在 Mac 上选择显示器";
+"For an external display, connect Mac power and external input devices before closing the lid. If Closed-Lid Desktop is enabled on your Mac, wait for Lid Desktop to appear here." = "使用外接显示器时，请先接通 Mac 电源并连接外接输入设备。若 Mac 已启用合盖桌面，请等这里显示 Lid Desktop 再合盖。";
+"Closed-lid desktop is unavailable on this Mac." = "这台 Mac 无法使用合盖桌面。";
+"On the Mac, allow Screen Recording for Closed-Lid Desktop, then try again." = "请先在 Mac 上允许合盖桌面录制屏幕，然后再试。";
+"On the Mac, approve the Closed-Lid Desktop power helper, then try again." = "请先在 Mac 上允许合盖桌面的电源辅助服务，然后再试。";
+"A closed-lid sharing session is already active." = "已有合盖共享会话正在运行。";
+"Normal sleep is being restored. Try sharing again in a moment." = "正在恢复 Mac 睡眠设置，请稍后重试。";
+"Open the Mac lid before starting Closed-Lid Desktop." = "请先打开 Mac 机盖，再启动合盖桌面。";
+"Stop the separate Lid Desktop app before starting integrated sharing." = "请先关闭独立版 Lid Desktop，再使用内置合盖桌面。";
+"Could not create Lid Desktop on this Mac." = "无法在这台 Mac 上创建合盖桌面。";
+"Closed-lid preparation timed out. Check the Mac settings and try again." = "准备合盖桌面超时。请检查 Mac 设置后重试。";
+"The Mac power helper is unavailable. Check Background Items in System Settings." = "Mac 电源辅助服务不可用。请在系统设置中检查后台项目。";
+"The iPhone did not reconnect. Normal sleep restored." = "iPhone 未重新连接，已恢复正常睡眠设置。";
+"Closed-lid sharing ended on the Mac." = "已在 Mac 上结束合盖共享。";
+"Closed-lid desktop turned off on the Mac." = "Mac 已关闭合盖桌面。";
+"Closed-lid sharing permissions changed. Check the Mac settings." = "合盖共享权限已更改，请检查 Mac 设置。";
+"The virtual display is unavailable. Open the Mac lid and try again." = "合盖桌面暂时不可用，请开盖后重试。";
+"Charge your Mac above 15% or connect power before sharing." = "请将 Mac 电量充至 15% 以上，或连接电源后开始共享。";
+"Stop the separate Lid Desktop app or finish restoring sleep before trying again." = "请先关闭独立版 Lid Desktop，或等待睡眠设置恢复后重试。";
+"Closed-lid sharing reached its two-hour limit." = "合盖共享已达到两小时上限。";
+"Closed-lid sharing ended because Mac battery reached 15%." = "Mac 电量已降至 15%，合盖共享已结束。";
+"Mac battery is low. Connect power to keep sharing." = "Mac 电量较低，请接通电源以继续共享。";
+"This closed-lid session ends in less than five minutes." = "本次合盖共享将在五分钟内结束。";
+"Lid Desktop could not reconnect. Open the Mac lid and try sharing again." = "合盖桌面未能恢复连接，请开盖后重新共享。";
+"Keep the lid open while sharing the built-in display." = "正在共享内建屏幕，请保持开盖。";
+
+"Reconnecting to your Mac…" = "正在重新连接 Mac…";
+"Screen sharing could not reconnect. Try sharing again." = "屏幕共享未能恢复，请重新开始共享。";

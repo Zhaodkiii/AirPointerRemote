@@ -27,12 +27,14 @@ struct LinkedScreenView: View {
                         Toggle("Keep Mac Awake While Sharing", isOn: awakeBinding)
                             .fixedSize()
                         if client.awake {
-                            Text("To close the lid, connect power and an external keyboard, mouse and display. Choose that display when sharing.")
+                            Text("For an external display, connect Mac power and external input devices before closing the lid. If Closed-Lid Desktop is enabled on your Mac, wait for Lid Desktop to appear here.")
                                 .font(.caption).foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center).padding(.horizontal)
                         }
                         Button(client.canRetrySharing ? String(localized: "Resume Sharing") : String(localized: "Start Sharing")) { client.start(connection) }
                             .buttonStyle(.borderedProminent).disabled(connection.macPaused)
+                        Button("Choose a Display on the Mac") { client.start(connection, chooseDisplay: true) }
+                            .font(.subheadline).disabled(connection.macPaused)
                         if connection.macPaused { Text("Resume pointer control to share.").font(.caption) }
                     } else { Button("Back to Pairing") { dismiss() } }
                     Spacer()
@@ -149,7 +151,11 @@ struct LinkedWorkspace: View {
             Button("Fit Display") { fitPreview() }.disabled(!client.previewZoomed)
             Button("Click at Pointer") { client.control(.init(.currentClick)) }.disabled(!client.canPoint)
             Button("Right Click at Pointer") { client.control(.init(.currentRight)) }.disabled(!client.canPoint)
-            Toggle("Keep Mac Awake", isOn: awakeBinding)
+            if client.closedLidDesktop {
+                Label("Lid Desktop keeps your Mac awake", systemImage: "bolt")
+            } else {
+                Toggle("Keep Mac Awake", isOn: awakeBinding)
+            }
             Button("Stop Sharing", role: .destructive) { client.end() }
         } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Sharing options")
     }
@@ -172,7 +178,23 @@ struct LinkedWorkspace: View {
                     .frame(height: direct || fullScreen ? nil : previewHeight)
                     .frame(maxHeight: direct || fullScreen ? .infinity : nil)
                     .overlay(alignment: .bottom) {
-                        if showPreviewHint && !direct && !fullScreen && !client.editing && !client.resuming {
+                        if let warning = client.closedLidPowerWarning, !client.editing {
+                            Label(Bundle.main.localizedString(forKey: warning, value: warning, table: nil),
+                                  systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .padding(8)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                                .padding(8)
+                                .allowsHitTesting(false)
+                        } else if client.showCloseLidHint && !client.editing && !client.resuming {
+                            Label(client.requiresOpenLid ? "Keep the lid open while sharing the built-in display." : "Ready to close the Mac lid",
+                                  systemImage: client.requiresOpenLid ? "laptopcomputer" : "checkmark.circle")
+                                .font(.caption.weight(.medium))
+                                .padding(8)
+                                .background(.regularMaterial, in: Capsule())
+                                .padding(8)
+                                .allowsHitTesting(false)
+                        } else if showPreviewHint && !direct && !fullScreen && !client.editing && !client.resuming {
                             Text("Pinch to zoom")
                                 .font(.caption)
                                 .padding(8)
@@ -191,7 +213,7 @@ struct LinkedWorkspace: View {
                     }
                     .overlay {
                         if client.resuming {
-                            Label("Restoring display…", systemImage: "arrow.clockwise")
+                            Label(client.reconnectingTransport ? (client.closedLidDesktop ? "Reconnecting to Lid Desktop…" : "Reconnecting to your Mac…") : "Restoring display…", systemImage: "arrow.clockwise")
                                 .padding(8).background(.regularMaterial, in: Capsule())
                         } else if client.videoDelayed {
                             Label("Video delayed. Clicks paused.", systemImage: "hourglass")

@@ -5,6 +5,12 @@ import CoreBluetooth
 final class ReceiverMenu: NSObject, NSMenuDelegate {
     private var rememberItem: NSMenuItem!
     private var forgetItem: NSMenuItem!
+    #if CLOSED_LID_DESKTOP
+    private var lidSettings: NSMenuItem!
+    private var lidStop: NSMenuItem!
+    private var lidStart: NSMenuItem!
+    private var lidMoveWindow: NSMenuItem!
+    #endif
     private let receiver: Receiver
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let status = NSMenuItem(title: String(localized: "Waiting for a device"), action: nil, keyEquivalent: "")
@@ -32,6 +38,13 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         rememberItem = add(String(localized: "Remember Display for This iPhone"), #selector(toggleRemember), to: menu)
         forgetItem = add(String(localized: "Forget All Remembered Displays"), #selector(forgetDisplays), to: menu)
+        #if CLOSED_LID_DESKTOP
+        menu.addItem(.separator())
+        lidSettings = add(String(localized: "Closed-Lid Desktop…"), #selector(showLidSettings), to: menu)
+        lidStart = add(String(localized: "Switch to Lid Desktop"), #selector(switchToLidDesktop), to: menu)
+        lidStop = add(String(localized: "Switch to Built-in Display"), #selector(switchFromLidDesktop), to: menu)
+        lidMoveWindow = add(String(localized: "Move Focused Window to Lid Desktop"), #selector(moveLidWindow), to: menu)
+        #endif
         menu.delegate = self
         menu.autoenablesItems = false
         status.isEnabled = false
@@ -49,7 +62,11 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
         refresh()
         if !UserDefaults.standard.bool(forKey: "didShowConnectionHelp") {
             UserDefaults.standard.set(true, forKey: "didShowConnectionHelp")
+            #if CLOSED_LID_DESKTOP
+            DispatchQueue.main.async { ClosedLidWindow.shared.show() }
+            #else
             DispatchQueue.main.async { [weak self] in self?.showHelp() }
+            #endif
         }
         var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         InstallEventHandler(GetApplicationEventTarget(), { _, _, context in
@@ -98,7 +115,29 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
         rememberItem.state = host?.remembersDisplay == true ? .on : .off
         rememberItem.isEnabled = host?.canRememberDisplay == true
         forgetItem.isEnabled = LinkedHost.hasRememberedDisplays
+        #if CLOSED_LID_DESKTOP
+        let desktop = ClosedLidDesktop.shared
+        desktop.refresh()
+        lidStart.isHidden = !desktop.enabled || !desktop.sharingAnotherDisplay || desktop.active
+        lidStart.isEnabled = desktop.canSwitchToLidDesktop
+        lidSettings.state = desktop.enabled ? .on : .off
+        lidStop.isHidden = !desktop.active
+        lidStop.isEnabled = !desktop.switchingDisplay
+        lidMoveWindow.isHidden = !desktop.sharing || desktop.lidClosed
+        lidMoveWindow.isEnabled = desktop.pointerAllowed
+        #endif
     }
+
+    #if CLOSED_LID_DESKTOP
+    @objc private func showLidSettings() { ClosedLidWindow.shared.show() }
+    @objc private func switchToLidDesktop() { ClosedLidDesktop.shared.requestLidDesktop() }
+    @objc private func switchFromLidDesktop() { ClosedLidDesktop.shared.requestBuiltInDisplay() }
+    @objc private func moveLidWindow() {
+        guard !ClosedLidDesktop.shared.moveFocusedWindow() else { return }
+        NSSound.beep()
+        status.title = String(localized: "Select a movable Mac window and try again.")
+    }
+    #endif
 
     @objc private func toggleRemember() {
         guard let host = LinkedHost.sharing, host.canRememberDisplay else { return }
@@ -171,20 +210,32 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
     @objc private func togglePause(_ sender: NSMenuItem) {
         paused.toggle()
         sender.title = paused ? String(localized: "Resume Control") : String(localized: "Pause Control")
+        #if CLOSED_LID_DESKTOP
+        if paused { ClosedLidDesktop.shared.stop() }
+        #endif
         receiver.pauseControl(paused)
     }
     @objc func stopControl() {
         paused = true
         pauseItem?.title = String(localized: "Resume Control")
+        #if CLOSED_LID_DESKTOP
+        ClosedLidDesktop.shared.stop()
+        #endif
         receiver.stopControl()
         status.title = String(localized: "Control stopped. Resume from this menu.")
     }
     @objc private func revoke() {
+        #if CLOSED_LID_DESKTOP
+        ClosedLidDesktop.shared.stop()
+        #endif
         LinkedHost.forgetAllDisplays()
         receiver.revokePhones()
         status.title = String(localized: "iPhone pairings revoked.")
     }
     @objc private func quit() {
+        #if CLOSED_LID_DESKTOP
+        ClosedLidDesktop.shared.stop()
+        #endif
         receiver.stopControl()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { NSApp.terminate(nil) }
     }

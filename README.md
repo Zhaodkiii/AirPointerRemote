@@ -9,6 +9,7 @@
 | AirPointer Remote iPhone | iOS 17 | `com.daokaihua.airpointerremote` |
 | AirPointer Remote Watch | watchOS 11 | `com.daokaihua.airpointerremote.watchkitapp` |
 | AirPointer Remote Mac | macOS 14 | `com.daokaihua.airpointerremote` |
+| AirPointer Remote Mac Direct | macOS 14 | `com.daokaihua.airpointerremote.direct` |
 
 先运行 Mac 接收端，允许蓝牙访问，并在「系统设置 → 隐私与安全性 → 辅助功能」中为新 App 授权。然后在 iPhone 或手表上选择 Mac 并完成配对。新 Bundle ID 对应新的 App 安装和权限记录，首次使用需要重新配对。Mac 菜单栏可以暂停、撤销手机配对或退出。紧急停止快捷键为 Control + Option + Command + 句号。
 
@@ -34,6 +35,14 @@ Mac 的 Debug 配置沿用开发版的鼠标控制方式。Release 配置启用�
 3. 用 iPhone Scheme 选择通用 iOS 设备并归档。Watch App 随 iPhone 构建上传。单独用 Mac Scheme 归档 macOS 构建。
 4. 在 Xcode Organizer 验证并上传两个签名归档。用 TestFlight 检查分发版体验，填写 Apple Watch 截图、隐私和支持信息、加密申报及配对说明后送审。
 
+## 合盖桌面
+
+从「应用程序」打开 **AirPointer Remote Direct**。首次打开会显示 **Closed-Lid Desktop** 设置，之后可从 Mac 菜单栏重新打开。保持机盖打开，打开功能开关，允许屏幕录制与鼠标控制，在 **Closed-Lid Power** 项点击 **Set Up** 并按系统提示允许后台服务。直装版使用独立 Bundle ID，首次配对需要重新确认。
+
+在已配对的 iPhone 上点首页 **Share** 或 **Linked Screen → Start Sharing**。看到 Lid Desktop 和「可以合上 Mac 屏幕了」后再合盖。开盖会恢复内屏亮度，手机继续显示原来的虚拟桌面。想显示内屏时，可在手机的 Linked Screen 选择 **Choose a Display on the Mac**。退出共享后，Mac 恢复原睡眠设置。
+
+此前安装过普通接收端或独立的 Lid Desktop 工具时，先从菜单栏结束这些程序，再打开直装版。移除直装版前，可在合盖桌面设置中结束共享并点 **Remove Power Helper**。首次授权、实际合盖、低电量与崩溃恢复需要用真机确认。内屏亮度与虚拟显示器使用 macOS 私有接口，升级 macOS 后要重新验证。
+
 ## 官网 Mac 安装包
 
 在项目目录运行：
@@ -42,7 +51,7 @@ Mac 的 Debug 配置沿用开发版的鼠标控制方式。Release 配置启用�
 ./scripts/build-mac-dmg.sh
 ```
 
-脚本从当前源码构建 Mac Release，打包 Apple silicon 和 Intel 两种架构，并使用团队 `4AN6PV98G7` 的 Developer ID Application 签名。需要 Xcode 和 Python 3。首次运行会通过 PyPI 将 dmgbuild 安装到项目的本地构建目录。默认使用 Xcode 已登录的团队账号公证包内 App，安装镜像输出到 `DerivedData/WebsiteRelease/`，文件名带有 `-app-notarized`。
+脚本从当前源码构建 Mac Direct Release，打包 Apple silicon 和 Intel 两种架构，并使用团队 `4AN6PV98G7` 的 Developer ID Application 签名。需要 Xcode 和 Python 3。首次运行会通过 PyPI 将 dmgbuild 安装到项目的本地构建目录。默认使用 Xcode 已登录的团队账号公证包内 App，安装镜像输出到 `DerivedData/WebsiteRelease/`，文件名带有 `-app-notarized`。
 
 官网发布时，使用团队已配置的 notarytool 钥匙串凭据为最终 DMG 公证：
 
@@ -52,7 +61,7 @@ AIRPOINTER_NOTARY_PROFILE=AirPointerNotary ./scripts/build-mac-dmg.sh
 
 `AirPointerNotary` 是示例名称。首次可运行 `xcrun notarytool store-credentials AirPointerNotary`，按交互提示配置团队认证。脚本会验证 DMG 的公证票据和包内 App 的签名，并输出带版本号和构建号的安装包路径。用户打开 DMG，将 AirPointer Remote 拖入 Applications，再从 Applications 打开，菜单栏会显示接收端图标。
 
-脚本验证通过后，也将相同的 DMG 更新到 `iPhone/Resources/AirPointer Remote for Mac.dmg`。随后重新构建 iPhone App，即可在 **Choose Your Mac** 页面进入 **Set Up Your Mac**，再点 **Share Mac Installer** 打开系统分享面板。例如，选择 AirDrop 将文件传到 Mac，再手动安装和开启接收端。已安装的 iPhone 版本随下一次构建和安装取得新 DMG。
+运行 `./scripts/build-mac-dmg.sh --standard` 可构建普通 Mac 版并更新 `iPhone/Resources/AirPointer Remote for Mac.dmg`。随后重新构建 iPhone App，用户可在 **Choose Your Mac → Set Up Your Mac → Share Mac Installer** 找到普通版安装包。官网直装版有独立的 `-Direct` DMG。
 
 ## 开发检查
 

@@ -182,13 +182,14 @@ struct ContentView: View {
                         }
                     }
                     .font(.caption)
+                    .disabled(!connection.connected || sharing.resuming)
                     .accessibilityLabel("Change shared display")
                 } else {
                     Text(inlineRequested && connection.connected ? sharing.status : connection.status).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 0)
-            if connection.connected {
+            if connection.connected || (inlineWorkspace && sharing.running) {
                 Button(action: toggleInlineSharing) {
                     HStack(spacing: 4) {
                         if sharing.running && !sharing.live { ProgressView().controlSize(.small) }
@@ -210,6 +211,7 @@ struct ContentView: View {
                         .frame(width: 40, height: 40)
                 }
                 .buttonStyle(.bordered)
+                .disabled(!connection.connected)
                 .accessibilityLabel(controller.paused ? String(localized: "Resume Control") : String(localized: "Pause Control"))
             }
         }

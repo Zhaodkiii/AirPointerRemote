@@ -136,11 +136,16 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     private(set) var linkedRequested = false
     private var linkedParked = false
     var linkedCanSuspend = false
-    func finishLinkedScreen() {
+    func finishLinkedScreen(interrupted: Bool = false) {
         linkedCanSuspend = false
         linkedParked = false
         linkedRequested = false
-        send(.init(.linkEnd))
+        send(.init(.linkEnd, phase: interrupted ? 1 : 0))
+    }
+
+    func rejoinLinkedScreen() {
+        linkedRequested = true
+        linkedCanSuspend = true
     }
 
     var connectedMacID: UUID? { connected ? peripheral?.identifier : nil }
@@ -150,7 +155,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         linkedRequested = true
         let first = UInt32.random(in: .min ... .max)
         let second = UInt32.random(in: .min ... .max)
-        send(.init(.linkStart, x: Double(first), y: Double(second), phase: (inline ? 1 : 0) | (chooseDisplay ? 2 : 0)))
+        send(.init(.linkStart, x: Double(first), y: Double(second), phase: (inline ? 1 : 0) | (chooseDisplay ? 2 : 0) | 4))
         return LinkedOffer(key: sessionKey, first: first, second: second)
     }
 

@@ -29,10 +29,12 @@ final class PhoneReceiver {
     private let mouse = PhoneMouse()
     private var linked: LinkedHost?
     private var allowPendingPointer = false
-    private func endSharing() {
+    private func endSharing(connectionLost: Bool = false) {
         guard let host = linked else { return }
-        linked = nil
-        DispatchQueue.main.async { host.stop() }
+        if !connectionLost { linked = nil }
+        DispatchQueue.main.async {
+            if connectionLost { host.connectionLost() } else { host.stop() }
+        }
     }
     private var sessions: [UUID: Session] = [:]
     private var notifications: [(Data, CBCentral)] = []
@@ -69,7 +71,7 @@ final class PhoneReceiver {
     }
 
     func unsubscribe(_ central: CBCentral) {
-        if activeID == central.identifier { endSharing(); mouse.reset(); activeID = nil; onEndControl?(); onState?(String(localized: "iPhone disconnected")) }
+        if activeID == central.identifier { endSharing(connectionLost: true); mouse.reset(); activeID = nil; onEndControl?(); onState?(String(localized: "iPhone disconnected")) }
         if pendingID == central.identifier {
             pendingID = nil
             if let session = sessions[central.identifier] { dismissPairingAlert(token: session.promptToken) }
@@ -155,7 +157,19 @@ final class PhoneReceiver {
             status(session, state: "disconnected")
             return
         }
-        if command.action == .linkEnd { session.backgroundViewing = false; session.backgroundDeadline = nil; endSharing(); return }
+        if command.action == .linkEnd {
+            session.backgroundViewing = false
+            session.backgroundDeadline = nil
+            let interrupted = command.phase == 1
+            endSharing(connectionLost: interrupted)
+            #if CLOSED_LID_DESKTOP
+            if !interrupted {
+                let peer = session.peerKey.base64EncodedString()
+                DispatchQueue.main.async { ClosedLidDesktop.shared.cancelReconnect(from: peer) }
+            }
+            #endif
+            return
+        }
         if command.action == .heartbeat,
            let lifecycle = PhoneProtocol.LinkedLifecycle(rawValue: command.phase), let host = linked {
             switch lifecycle {
@@ -198,7 +212,7 @@ final class PhoneReceiver {
                 }
                 host.acceptsLinkedInput = acceptsLinkedInput
                 host.report = state
-                host.start(offer, chooseDisplay: command.phase & 2 != 0)
+                host.start(offer, chooseDisplay: command.phase & 2 != 0, supportsTransportResume: command.phase & 4 != 0)
             }
             return
         }
@@ -232,7 +246,7 @@ final class PhoneReceiver {
             old.authorized = false
             status(old, state: "replaced")
         }
-        endSharing()
+        endSharing(connectionLost: linked?.peer == session.peerKey.base64EncodedString())
         manager?.setDesiredConnectionLatency(.low, for: session.central)
         onTakeControl?()
         activeID = session.central.identifier
@@ -269,7 +283,7 @@ final class PhoneReceiver {
             if now - session.lastSeen > 0.3 { mouse.reset() }
             if !(session.backgroundViewing && linked != nil), now > (session.backgroundDeadline ?? session.lastSeen + 3) {
                 session.authorized = false
-                endSharing()
+                endSharing(connectionLost: session.backgroundDeadline == nil)
                 self.activeID = nil
                 onEndControl?()
                 status(session, state: "timeout")

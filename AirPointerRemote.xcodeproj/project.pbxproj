@@ -15,6 +15,12 @@
 		C30000000000000000000014 /* AirPointerRemoteWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* AirPointerRemoteWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C30000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019 /* LICENSE */; };
 		C30000000000000000000032 /* Shared/LinkedTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000031 /* Shared/LinkedTransport.swift */; };
+		D40000000000000000000012 /* Shared/PhoneProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000011 /* Shared/PhoneProtocol.swift */; };
+		D40000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019 /* LICENSE */; };
+		D40000000000000000000032 /* Shared/LinkedTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000031 /* Shared/LinkedTransport.swift */; };
+		D40000000000000000000022 /* AirPointerLidPower in Embed Power Helper */ = {isa = PBXBuildFile; fileRef = E50000000000000000000001; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		D40000000000000000000023 /* Power Helper Plist */ = {isa = PBXBuildFile; fileRef = D40000000000000000000025; };
+		E50000000000000000000012 /* LidPowerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D40000000000000000000026; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -25,6 +31,7 @@
 			remoteGlobalIDString = A10000000000000000000006;
 			remoteInfo = "AirPointer Remote Watch";
 		};
+		E50000000000000000000017 /* Power Helper Proxy */ = {isa = PBXContainerItemProxy; containerPortal = C30000000000000000000009; proxyType = 1; remoteGlobalIDString = E50000000000000000000006; remoteInfo = AirPointerLidPower; };
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -39,6 +46,8 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D40000000000000000000020 /* Embed Power Helper */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 6; files = (D40000000000000000000022, ); name = "Embed Power Helper"; runOnlyForDeploymentPostprocessing = 0; };
+		D40000000000000000000021 /* Embed LaunchDaemon Plist */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = Contents/Library/LaunchDaemons; dstSubfolderSpec = 1; files = (D40000000000000000000023, ); name = "Embed LaunchDaemon Plist"; runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +57,10 @@
 		C30000000000000000000011 /* Shared/PhoneProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/PhoneProtocol.swift; sourceTree = SOURCE_ROOT; };
 		C30000000000000000000019 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = SOURCE_ROOT; };
 		C30000000000000000000031 /* Shared/LinkedTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/LinkedTransport.swift; sourceTree = SOURCE_ROOT; };
+		D40000000000000000000001 /* AirPointerRemoteMacDirect.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemoteMacDirect.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D40000000000000000000025 /* Power Helper Plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Config/com.daokaihua.airpointerremote.direct.power.plist; sourceTree = SOURCE_ROOT; };
+		D40000000000000000000026 /* LidPowerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacDirect/LidPowerProtocol.swift; sourceTree = SOURCE_ROOT; };
+		E50000000000000000000001 /* AirPointerLidPower */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = AirPointerLidPower; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -66,6 +79,8 @@
 			path = iPhone;
 			sourceTree = "<group>";
 		};
+		D40000000000000000000002 /* MacDirect */ = {isa = PBXFileSystemSynchronizedRootGroup; path = MacDirect; sourceTree = "<group>"; };
+		E50000000000000000000002 /* LidPowerHelper */ = {isa = PBXFileSystemSynchronizedRootGroup; path = LidPowerHelper; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +105,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D40000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -98,6 +120,9 @@
 			children = (
 				C30000000000000000000002 /* iPhone */,
 				B20000000000000000000002 /* Mac */,
+				D40000000000000000000002 /* MacDirect */,
+				E50000000000000000000002 /* LidPowerHelper */,
+				D40000000000000000000025 /* Power Helper Plist */,
 				A10000000000000000000002 /* Watch */,
 				C30000000000000000000011 /* Shared/PhoneProtocol.swift */,
 				C30000000000000000000031 /* Shared/LinkedTransport.swift */,
@@ -111,6 +136,8 @@
 			children = (
 				C30000000000000000000001 /* AirPointerRemote.app */,
 				B20000000000000000000001 /* AirPointerRemoteMac.app */,
+				D40000000000000000000001 /* AirPointerRemoteMacDirect.app */,
+				E50000000000000000000001 /* AirPointerLidPower */,
 				A10000000000000000000001 /* AirPointerRemoteWatch.app */,
 			);
 			name = Products;
@@ -181,6 +208,42 @@
 			productReference = C30000000000000000000001 /* AirPointerRemote.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D40000000000000000000006 /* AirPointer Remote Mac Direct */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D4000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Mac Direct" */;
+			buildPhases = (
+				D40000000000000000000007 /* Sources */,
+				D40000000000000000000003 /* Frameworks */,
+				D40000000000000000000008 /* Resources */,
+				D40000000000000000000020 /* Embed Power Helper */,
+				D40000000000000000000021 /* Embed LaunchDaemon Plist */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D40000000000000000000024 /* Power Helper Dependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B20000000000000000000002 /* Mac */,
+				D40000000000000000000002 /* MacDirect */,
+			);
+			name = "AirPointer Remote Mac Direct";
+			productName = AirPointerRemoteMacDirect;
+			productReference = D40000000000000000000001 /* AirPointerRemoteMacDirect.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E50000000000000000000006 /* AirPointerLidPower */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E5000000000000000000000B;
+			buildPhases = (E50000000000000000000007, );
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (E50000000000000000000002, );
+			name = AirPointerLidPower;
+			productName = AirPointerLidPower;
+			productReference = E50000000000000000000001;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -209,6 +272,8 @@
 			targets = (
 				C30000000000000000000006 /* AirPointer Remote iPhone */,
 				B20000000000000000000006 /* AirPointer Remote Mac */,
+				D40000000000000000000006 /* AirPointer Remote Mac Direct */,
+				E50000000000000000000006 /* AirPointerLidPower */,
 				A10000000000000000000006 /* AirPointer Remote Watch */,
 			);
 		};
@@ -236,6 +301,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				C30000000000000000000018 /* LICENSE in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D40000000000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D40000000000000000000018 /* LICENSE in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -267,6 +340,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D40000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D40000000000000000000012 /* Shared/PhoneProtocol.swift in Sources */,
+				D40000000000000000000032 /* Shared/LinkedTransport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E50000000000000000000007 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (E50000000000000000000012, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -275,6 +358,7 @@
 			target = A10000000000000000000006 /* AirPointer Remote Watch */;
 			targetProxy = C30000000000000000000017 /* PBXContainerItemProxy */;
 		};
+		D40000000000000000000024 /* Power Helper Dependency */ = {isa = PBXTargetDependency; target = E50000000000000000000006; targetProxy = E50000000000000000000017; };
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -451,6 +535,96 @@
 			};
 			name = Release;
 		};
+		D4000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 4AN6PV98G7;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/MacInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote Direct";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Umar Afzal and contributors";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).direct";
+				PRODUCT_NAME = AirPointerRemoteMacDirect;
+				SDKROOT = macosx;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CLOSED_LID_DESKTOP";
+				SWIFT_OBJC_BRIDGING_HEADER = MacDirect/VirtualScreen.h;
+			};
+			name = Debug;
+		};
+		D4000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 4AN6PV98G7;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/MacInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote Direct";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Umar Afzal and contributors";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).direct";
+				PRODUCT_NAME = AirPointerRemoteMacDirect;
+				SDKROOT = macosx;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CLOSED_LID_DESKTOP";
+				SWIFT_OBJC_BRIDGING_HEADER = MacDirect/VirtualScreen.h;
+			};
+			name = Release;
+		};
+		E5000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 4AN6PV98G7;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).direct.power";
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				OTHER_CODE_SIGN_FLAGS = "--identifier $(PRODUCT_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = AirPointerLidPower;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		E5000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 4AN6PV98G7;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).direct.power";
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				OTHER_CODE_SIGN_FLAGS = "--identifier $(PRODUCT_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = AirPointerLidPower;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -490,6 +664,16 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		D4000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Mac Direct" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D4000000000000000000000E /* Debug */,
+				D4000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E5000000000000000000000B /* Build configuration list for Power Helper */ = {isa = XCConfigurationList; buildConfigurations = (E5000000000000000000000E, E5000000000000000000000F, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = C30000000000000000000009 /* Project object */;

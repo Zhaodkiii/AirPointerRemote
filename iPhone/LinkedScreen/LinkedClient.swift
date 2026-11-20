@@ -92,10 +92,23 @@ final class LinkedClient: ObservableObject {
     @Published private(set) var canRetrySharing = false
 
     private var inlineRequest = false
+    @Published private(set) var closedLidDesktop = false
+    @Published private(set) var showCloseLidHint = false
+    @Published private(set) var requiresOpenLid = false
+    @Published private(set) var closedLidPowerWarning: String?
+    private var closeLidHintTask: Task<Void, Never>?
+    private var showDisplayHintOnNextFrame = false
+    private weak var reconnectPhone: PhoneConnection?
+    private var offer: LinkedOffer?
+    private var transportResume = false
+    private var transportDeadline: TimeInterval?
+    var reconnectingTransport: Bool { transportDeadline != nil }
+    private var retryTransport: Task<Void, Never>?
 
     func start(_ phone: PhoneConnection, inline: Bool = false, chooseDisplay: Bool = false) {
         guard !running, let offer = phone.beginLinkedScreen(inline: inline, chooseDisplay: chooseDisplay) else { return }
         resumeMac = nil
+        reconnectPhone = nil
         canRetrySharing = false
         inlineRequest = inline
         self.phone = phone
@@ -103,12 +116,23 @@ final class LinkedClient: ObservableObject {
         running = true
         status = String(localized: "Finding your Mac on the local network…")
         deadline = Date().addingTimeInterval(30)
+        self.offer = offer
+        browse(offer)
+        timeout = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            guard pausedAt == nil else { return }
+            guard Date() > deadline else { return }
+            interrupted(live ? String(localized: "Mac stopped responding. Start sharing again.") : String(localized: "Timed out. Check both apps, Local Network access and Wi-Fi, then retry."))
+        }
+    }
+
+    private func browse(_ offer: LinkedOffer) {
         let browser = NWBrowser(for: .bonjour(type: LinkedOffer.service, domain: nil), using: .tcp)
         self.browser = browser
         browser.stateUpdateHandler = { [weak self, weak browser] state in
             guard let self, let browser, self.browser === browser else { return }
-            if case .waiting(let error) = state { self.status = String(localized: "Check Local Network access and Wi-Fi. ") + error.localizedDescription }
-            if case .failed(let error) = state { self.end(error.localizedDescription) }
+            if case .waiting(let error) = state, self.transportDeadline == nil { self.status = String(localized: "Check Local Network access and Wi-Fi. ") + error.localizedDescription }
+            if case .failed(let error) = state { self.interrupted(error.localizedDescription) }
         }
         browser.browseResultsChangedHandler = { [weak self, weak browser] results, _ in
             guard let self, let browser, self.browser === browser else { return }
@@ -121,16 +145,52 @@ final class LinkedClient: ObservableObject {
             }
         }
         browser.start(queue: .main)
-        timeout = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            guard pausedAt == nil else { return }
-            guard Date() > deadline else { return }
-            interrupted(live ? String(localized: "Mac stopped responding. Start sharing again.") : String(localized: "Timed out. Check both apps, Local Network access and Wi-Fi, then retry."))
+    }
+
+    private func reconnectTransport(using offer: LinkedOffer) {
+        let now = ProcessInfo.processInfo.systemUptime
+        if transportDeadline == nil {
+            transportDeadline = now + 27
+            resuming = true
+            canPoint = false
+            videoDelayed = false
+            pendingKeyboardClick = nil
+            focus = nil
+            target = nil
+            selectionID = nil
+            if submitting != nil {
+                submitting = nil
+                readingSelection = false
+                editorHint = String(localized: "Check the Mac before submitting this draft again.")
+            }
+            status = closedLidDesktop ? String(localized: "Reconnecting to Lid Desktop…") : String(localized: "Reconnecting to your Mac…")
+            showCloseLidHint = false
+        }
+        guard let transportDeadline, now < transportDeadline else {
+            end(String(localized: "Lid Desktop could not reconnect. Open the Mac lid and try sharing again."), keepDraft: true)
+            return
+        }
+        channel?.close(keepLastFrame: true)
+        channel = nil
+        browser?.cancel()
+        browser = nil
+        retryTransport?.cancel()
+        deadline = Date().addingTimeInterval(min(5, transportDeadline - now))
+        retryTransport = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled, let self, self.running, self.transportDeadline != nil else { return }
+            self.browse(offer)
         }
     }
 
     private func connect(_ connection: NWConnection) {
         let link = LinkedVideoStream(connection, renderer: video.sampleBufferRenderer)
+        link.onVideoRecovery = { [weak self, weak link] in
+            guard let self, let link, self.channel === link else { return }
+            self.canPoint = false
+            self.resuming = true
+            self.deadline = Date().addingTimeInterval(8)
+        }
         channel = link
         link.onClose = { [weak self, weak link] reason in
             guard let self, let link, channel === link else { return }
@@ -144,8 +204,20 @@ final class LinkedClient: ObservableObject {
             guard let self, let link, channel === link, pausedAt == nil else { return }
             pendingKeyboardClick = nil
             if !live { live = true }
+            if showDisplayHintOnNextFrame {
+                showDisplayHintOnNextFrame = false
+                showCloseLidHint = true
+                closeLidHintTask?.cancel()
+                closeLidHintTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(5))
+                    guard !Task.isCancelled else { return }
+                    self?.showCloseLidHint = false
+                }
+            }
             if resuming { resuming = false }
-            deadline = Date().addingTimeInterval(5)
+            transportDeadline = nil
+            status = displayName
+            deadline = Date().addingTimeInterval(transportResume ? 11 : 5)
         }
         link.start()
     }
@@ -154,8 +226,14 @@ final class LinkedClient: ObservableObject {
         switch message.kind {
         case .waiting:
             deadline = Date().addingTimeInterval(95)
-            status = String(localized: "Choose the display to share on your Mac.")
+            status = message.closedLidDesktop == true
+                ? String(localized: "Preparing Lid Desktop on your Mac…")
+                : String(localized: "Choose the display to share on your Mac.")
         case .ready:
+            let oldLidDisplay = closedLidDesktop
+            closedLidDesktop = message.closedLidDesktop == true
+            transportResume = message.transportResume == true
+            requiresOpenLid = message.requiresOpenLid == true
             supportsGestures = message.supportsGestures == true
             pipSupportedByMac = message.pictureInPicture == true
             guard pausedAt == nil else { return }
@@ -164,14 +242,30 @@ final class LinkedClient: ObservableObject {
             guard message.x > 0, message.y > 0 else { end(String(localized: "Invalid display size.")); return }
             let nextSize = CGSize(width: message.x, height: message.y)
             let nextName = message.text.flatMap { $0 == "Mac display" ? nil : $0 } ?? String(localized: "Mac display")
-            if nextSize != size || nextName != displayName { fitPreview() }
+            let changedDisplay = nextName != displayName || oldLidDisplay != closedLidDesktop
+            if !live || changedDisplay {
+                showDisplayHintOnNextFrame = closedLidDesktop || requiresOpenLid
+            }
+            if live && changedDisplay {
+                closeLidHintTask?.cancel()
+                showCloseLidHint = false
+                canPoint = false
+                resuming = true
+                focus = nil
+                target = nil
+                selectionID = nil
+                pendingKeyboardClick = nil
+                hideKeyboard()
+            }
+            if nextSize != size || changedDisplay { fitPreview() }
             size = nextSize
             displayName = nextName
             status = displayName
-            deadline = Date().addingTimeInterval(12)
+            let remaining = transportDeadline.map { max(0, $0 - ProcessInfo.processInfo.systemUptime) } ?? 12
+            deadline = Date().addingTimeInterval(min(12, remaining))
         case .alive:
             guard pausedAt == nil, !resuming else { return }
-            deadline = Date().addingTimeInterval(5)
+            deadline = Date().addingTimeInterval(transportResume ? 11 : 5)
             let delayed = message.videoDelayed == true && pipState == .idle
             if videoDelayed != delayed { videoDelayed = delayed }
             let quality = message.videoBitrate.flatMap { bitrate in
@@ -180,6 +274,9 @@ final class LinkedClient: ObservableObject {
                 }
             }
             if videoQuality != quality { videoQuality = quality }
+            if closedLidPowerWarning != message.closedLidPowerWarning {
+                closedLidPowerWarning = message.closedLidPowerWarning
+            }
             let allowed = message.x == 1 && !delayed && pipState == .idle
             if canPoint != allowed { canPoint = allowed }
         case .focus:
@@ -222,7 +319,11 @@ final class LinkedClient: ObservableObject {
             else { editorHint = String(localized: "Edit rejected. Check the Mac field and selection.") }
         case .stop:
             let reason = message.text ?? "Sharing ended."
-            if message.x == 1 { interrupted(reason) } else { end(reason, keepDraft: resuming || pausedAt != nil) }
+            if message.x == 1 || message.x == 2 {
+                interrupted(reason)
+            } else {
+                end(reason, keepDraft: resuming || pausedAt != nil)
+            }
         default: break
         }
     }
@@ -283,21 +384,41 @@ final class LinkedClient: ObservableObject {
     func interrupted(_ reason: String) {
         guard running else { return }
         let id = sessionMac
+        let previousPhone = phone
+        if transportResume, live || transportDeadline != nil, pausedAt == nil, let offer {
+            reconnectTransport(using: offer)
+            return
+        }
         let shouldRetryAfterWake = live && !resuming && pausedAt == nil && pipState == .idle
-        end(reason, keepDraft: true)
+        let reconnectLid = closedLidDesktop && shouldRetryAfterWake
+        end(reconnectLid ? String(localized: "Reconnecting to Lid Desktop…") : reason,
+            keepDraft: true, preserveClosedLidSession: reconnectLid)
         if shouldRetryAfterWake { resumeMac = id }
+        if reconnectLid, let id {
+            reconnectPhone = previousPhone
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self, weak previousPhone] in
+                guard let self, let previousPhone, resumeMac == id else { return }
+                connectionChanged(previousPhone)
+            }
+        }
     }
 
     private var sessionMac: UUID?
     func connectionChanged(_ phone: PhoneConnection) {
         if !phone.connected {
+            if transportResume && (live || transportDeadline != nil) { return }
             interrupted(String(localized: "Connection to the Mac was interrupted."))
+        } else if transportResume, running, phone.connectedMacID == sessionMac {
+            phone.rejoinLinkedScreen()
         } else if let resumeMac, phone.connectedMacID == resumeMac, !phone.macPaused, uiActive {
             start(phone, inline: inlineRequest)
         }
     }
 
-    func end(_ reason: String = String(localized: "Sharing ended."), keepDraft: Bool = false) {
+    func end(_ reason: String = String(localized: "Sharing ended."), keepDraft: Bool = false,
+             preserveClosedLidSession: Bool = false) {
+        reconnectPhone?.finishLinkedScreen()
+        reconnectPhone = nil
         resumeMac = nil
         sessionMac = nil
         canRetrySharing = keepDraft
@@ -305,6 +426,18 @@ final class LinkedClient: ObservableObject {
             if !keepDraft { cancelDraft() }
             return
         }
+        let shouldSendStop = transportResume && !preserveClosedLidSession
+        transportResume = false
+        transportDeadline = nil
+        retryTransport?.cancel()
+        retryTransport = nil
+        offer = nil
+        closedLidDesktop = false
+        requiresOpenLid = false
+        closeLidHintTask?.cancel()
+        showCloseLidHint = false
+        showDisplayHintOnNextFrame = false
+        closedLidPowerWarning = nil
         pipState = .idle
         directTouch = false
         fullScreen = false
@@ -318,8 +451,8 @@ final class LinkedClient: ObservableObject {
         status = submitting == nil ? Bundle.main.localizedString(forKey: reason, value: reason, table: nil) : String(localized: "Sharing ended. Check the Mac before inserting again.")
         browser?.cancel(); browser = nil
         timeout?.invalidate(); timeout = nil
-        channel?.close(); channel = nil
-        phone?.finishLinkedScreen(); phone = nil
+        channel?.close(notifyMac: shouldSendStop); channel = nil
+        phone?.finishLinkedScreen(interrupted: preserveClosedLidSession); phone = nil
         pendingKeyboardClick = nil
         focus = nil; submitting = nil; canPoint = false
         videoDelayed = false

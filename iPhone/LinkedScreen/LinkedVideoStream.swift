@@ -13,6 +13,7 @@ final class LinkedVideoStream {
     private var decoder = LinkedDecoder()
     private var playback: Playback = .waiting
     private var needsFirstFrame = true
+    private var recoverySupported = false
     private var heartbeat: DispatchSourceTimer?
     private var backgroundParked = false
     private var lastFrame: TimeInterval?
@@ -25,6 +26,7 @@ final class LinkedVideoStream {
     var onClose: ((String) -> Void)?
     var onMessage: ((LinkedMessage) -> Void)?
     var onFirstFrame: (() -> Void)?
+    var onVideoRecovery: (() -> Void)?
 
     init(_ connection: NWConnection, renderer: AVSampleBufferVideoRenderer) {
         link = LinkedChannel(connection)
@@ -72,19 +74,25 @@ final class LinkedVideoStream {
         }
     }
 
-    func close() {
+    func close(keepLastFrame: Bool = false, notifyMac: Bool = false) {
         queue.async { [self] in
             link.onClose = nil
-            link.close()
             heartbeat?.cancel()
             heartbeat = nil
-            renderer.flush(removingDisplayedImage: true)
+            if notifyMac {
+                link.send(.init(.stop))
+                queue.asyncAfter(deadline: .now() + .milliseconds(200)) { [self] in link.close() }
+            } else {
+                link.close()
+            }
+            renderer.flush(removingDisplayedImage: !keepLastFrame)
         }
     }
 
     private func receive(_ message: LinkedMessage) {
         if message.kind == .ready, playback != .paused {
             needsFirstFrame = true
+            recoverySupported = message.transportResume == true
             playback = .playing
             decoder = LinkedDecoder()
             lastFrame = nil
@@ -104,7 +112,17 @@ final class LinkedVideoStream {
         guard playback == .playing else { link.send(acknowledgement); return }
         let started = ProcessInfo.processInfo.systemUptime
         guard renderer.status != .failed, let sample = decoder.sample(from: bytes) else {
-            link.close(String(localized: "Video playback interrupted. Resume sharing to try again."))
+            guard recoverySupported else {
+                link.close(String(localized: "Video playback interrupted. Resume sharing to try again."))
+                return
+            }
+            log.notice("Video renderer or decoder interrupted; requesting a fresh keyframe (renderer status: \(self.renderer.status.rawValue))")
+            playback = .waiting
+            renderer.flush(removingDisplayedImage: false)
+            acknowledgement.frameEnqueued = false
+            acknowledgement.requestKeyFrame = true
+            link.send(acknowledgement)
+            DispatchQueue.main.async { [weak self] in self?.onVideoRecovery?() }
             return
         }
         renderer.enqueue(sample)

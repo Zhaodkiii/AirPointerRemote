@@ -6,15 +6,35 @@ output_dir="$project_dir/DerivedData/WebsiteRelease"
 team_id="4AN6PV98G7"
 signing_identity="Developer ID Application: daokai hua ($team_id)"
 notary_profile="${AIRPOINTER_NOTARY_PROFILE:-}"
+edition="${1:---direct}"
 if [[ ${1:-} == --help ]]; then
-    echo "Usage: [AIRPOINTER_NOTARY_PROFILE=profile] ./scripts/build-mac-dmg.sh"
+    echo "Usage: [AIRPOINTER_NOTARY_PROFILE=profile] ./scripts/build-mac-dmg.sh [--direct|--standard]"
+    echo "The direct edition includes Closed-Lid Desktop. Use --standard for the iPhone installer resource."
     echo "With a profile, notarizes the final DMG. Otherwise, Xcode notarizes the app inside it."
     exit 0
 fi
-if [[ $# != 0 ]]; then
-    echo "Unexpected argument. Run with --help for usage." >&2
+if [[ $# -gt 1 ]]; then
+    echo "Run with --help for usage." >&2
     exit 2
 fi
+case "$edition" in
+    --direct)
+        scheme='AirPointer Remote Mac Direct'
+        product='AirPointerRemoteMacDirect.app'
+        app_name='AirPointer Remote Direct.app'
+        edition_suffix='-Direct'
+        ;;
+    --standard)
+        scheme='AirPointer Remote Mac'
+        product='AirPointerRemoteMac.app'
+        app_name='AirPointer Remote.app'
+        edition_suffix=''
+        ;;
+    *)
+        echo "Run with --help for usage." >&2
+        exit 2
+        ;;
+esac
 
 mkdir -p "$output_dir"
 work_dir="$(mktemp -d "$output_dir/.package.XXXXXX")"
@@ -29,10 +49,10 @@ cleanup() {
 trap cleanup EXIT
 
 archive="$work_dir/AirPointerRemote.xcarchive"
-app="$archive/Products/Applications/AirPointerRemoteMac.app"
+app="$archive/Products/Applications/$product"
 echo "Archiving Mac Release for Apple silicon and Intel…"
 xcodebuild -quiet -project "$project_dir/AirPointerRemote.xcodeproj" \
-    -scheme 'AirPointer Remote Mac' -configuration Release -destination 'generic/platform=macOS' \
+    -scheme "$scheme" -configuration Release -destination 'generic/platform=macOS' \
     -archivePath "$archive" -derivedDataPath "$output_dir/Build" \
     ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGN_STYLE=Manual \
     "DEVELOPMENT_TEAM=$team_id" "CODE_SIGN_IDENTITY=$signing_identity" \
@@ -66,7 +86,7 @@ if [[ -z "$notary_profile" ]]; then
         echo "Waiting for App notarization ($attempt/18)…"
         sleep 10
     done
-    app="$work_dir/notarized/AirPointerRemoteMac.app"
+    app="$work_dir/notarized/$product"
     xcrun stapler validate "$app"
     suffix="-app-notarized"
 fi
@@ -79,12 +99,12 @@ if ! "$tools_dir/bin/python" -c "import dmgbuild" >/dev/null 2>&1; then
     "$tools_dir/bin/python" -m pip install --disable-pip-version-check 'dmgbuild==1.6.7'
 fi
 mkdir -p "$work_dir/contents" "$work_dir/mount"
-ditto "$app" "$work_dir/contents/AirPointer Remote.app"
+ditto "$app" "$work_dir/contents/$app_name"
 xcrun swift "$project_dir/scripts/dmg-background.swift" "$work_dir/install.png"
-filename="AirPointer-Remote-${version}-${build}-macOS${suffix}.dmg"
+filename="AirPointer-Remote-${version}-${build}-macOS${edition_suffix}${suffix}.dmg"
 image="$work_dir/$filename"
 "$tools_dir/bin/python" -m dmgbuild -s "$project_dir/scripts/dmg-layout.py" \
-    -D "app=$work_dir/contents/AirPointer Remote.app" -D "background=$work_dir/install.png" \
+    -D "app=$work_dir/contents/$app_name" -D "background=$work_dir/install.png" \
     'AirPointer Remote' "$image"
 codesign --sign "$signing_identity" --identifier "$bundle_id.dmg" --timestamp "$image"
 
@@ -108,7 +128,7 @@ codesign --verify "$image"
 hdiutil attach -quiet -readonly -noautoopen -nobrowse -mountpoint "$work_dir/mount" "$image"
 mounted="$work_dir/mount"
 test "$(readlink "$mounted/Applications")" = /Applications
-"$tools_dir/bin/python" - "$mounted/.DS_Store" <<'PYTHON'
+"$tools_dir/bin/python" - "$mounted/.DS_Store" "$app_name" <<'PYTHON'
 import sys
 from ds_store import DSStore
 
@@ -116,22 +136,23 @@ with DSStore.open(sys.argv[1], "r") as store:
     icon_settings = store["."]["icvp"]
     if not icon_settings.get("backgroundImageAlias"):
         raise SystemExit("The DMG is missing its installer background.")
-    for name, expected in [("AirPointer Remote.app", (172, 190)), ("Applications", (468, 190))]:
+    for name, expected in [(sys.argv[2], (172, 190)), ("Applications", (468, 190))]:
         if store[name]["Iloc"] != expected:
             raise SystemExit(f"The DMG has an unexpected position for {name}.")
 PYTHON
-codesign --verify --deep --strict "$mounted/AirPointer Remote.app"
-spctl --assess --type execute --verbose "$mounted/AirPointer Remote.app"
+codesign --verify --deep --strict "$mounted/$app_name"
+spctl --assess --type execute --verbose "$mounted/$app_name"
 hdiutil detach -quiet "$mounted"
 mounted=""
 
-# Replace the generated iPhone resource only after the new image passes verification.
-installer="$project_dir/iPhone/Resources/AirPointer Remote for Mac.dmg"
-cp "$image" "$work_dir/embedded.dmg"
 mv -f "$image" "$output_dir/$filename"
-mv -f "$work_dir/embedded.dmg" "$installer"
 echo "DMG: $output_dir/$filename"
-echo "Updated iPhone resource: $installer"
+if [[ "$edition" == --standard ]]; then
+    installer="$project_dir/iPhone/Resources/AirPointer Remote for Mac.dmg"
+    cp "$output_dir/$filename" "$work_dir/embedded.dmg"
+    mv -f "$work_dir/embedded.dmg" "$installer"
+    echo "Updated iPhone resource: $installer"
+fi
 if [[ -z "$notary_profile" ]]; then
     echo "The app is notarized. Set AIRPOINTER_NOTARY_PROFILE to notarize the DMG itself for website distribution."
 fi

@@ -55,6 +55,11 @@ struct LinkedMessage: Codable {
     var padGesture: PhoneProtocol.PadGesture?
     var backgroundResume: Bool?
     var pictureInPicture: Bool?
+    var closedLidDesktop: Bool?
+    var transportResume: Bool?
+    var requiresOpenLid: Bool?
+    var requestKeyFrame: Bool?
+    var closedLidPowerWarning: String?
     var frameEnqueued: Bool?
     var videoDelayed: Bool?
     var videoBitrate: Int?
@@ -135,7 +140,8 @@ final class LinkedChannel {
         guard !closed else { return }
         connection.receive(minimumIncompleteLength: length, maximumLength: length) { [weak self] data, _, _, error in
             guard let self, !closed else { return }
-            guard error == nil, let data, data.count == length else { close("Sharing connection lost."); return }
+            if let error { close(error.localizedDescription); return }
+            guard let data, data.count == length else { close("Sharing connection lost."); return }
             handle(data)
         }
     }
