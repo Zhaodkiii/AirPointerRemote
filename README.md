@@ -51,17 +51,17 @@ Mac 的 Debug 配置沿用开发版的鼠标控制方式。Release 配置启用�
 ./scripts/build-mac-dmg.sh
 ```
 
-脚本从当前源码构建 Mac Direct Release，打包 Apple silicon 和 Intel 两种架构，并使用团队 `4AN6PV98G7` 的 Developer ID Application 签名。需要 Xcode 和 Python 3。首次运行会通过 PyPI 将 dmgbuild 安装到项目的本地构建目录。默认使用 Xcode 已登录的团队账号公证包内 App，安装镜像输出到 `DerivedData/WebsiteRelease/`，文件名带有 `-app-notarized`。
+脚本从当前源码构建标准版 Mac Release 并更新 iPhone 内置安装包。直接执行 `./scripts/dmg-layout.py` 也会调用同一打包流程。脚本打包 Apple silicon 和 Intel 两种架构，并使用团队 `4AN6PV98G7` 的 Developer ID Application 签名。需要 Xcode 和 Python 3。首次运行会通过 PyPI 将 dmgbuild 安装到项目的本地构建目录。默认使用 Xcode 已登录的团队账号公证包内 App，安装镜像输出到 `DerivedData/WebsiteRelease/`，文件名带有 `-app-notarized`。
 
 官网发布时，使用团队已配置的 notarytool 钥匙串凭据为最终 DMG 公证：
 
 ```bash
-AIRPOINTER_NOTARY_PROFILE=AirPointerNotary ./scripts/build-mac-dmg.sh
+AIRPOINTER_NOTARY_PROFILE=AirPointerNotary ./scripts/build-mac-dmg.sh --direct
 ```
 
 `AirPointerNotary` 是示例名称。首次可运行 `xcrun notarytool store-credentials AirPointerNotary`，按交互提示配置团队认证。脚本会验证 DMG 的公证票据和包内 App 的签名，并输出带版本号和构建号的安装包路径。用户打开 DMG，将 AirPointer Remote 拖入 Applications，再从 Applications 打开，菜单栏会显示接收端图标。
 
-运行 `./scripts/build-mac-dmg.sh --standard` 可构建普通 Mac 版并更新 `iPhone/Resources/AirPointer Remote for Mac.dmg`。随后重新构建 iPhone App，用户可在 **Choose Your Mac → Set Up Your Mac → Share Mac Installer** 找到普通版安装包。官网直装版有独立的 `-Direct` DMG。
+运行 `./scripts/build-mac-dmg.sh --standard` 可构建普通 Mac 版并更新 `iPhone/Resources/AirPointer Remote for Mac.dmg`。随后重新构建 iPhone App，用户可在 **Choose Your Mac → Set Up Your Mac → Share Mac Installer** 找到普通版安装包。使用 `--direct` 生成官网直装版独立的 `-Direct` DMG。
 
 ## 开发检查
 

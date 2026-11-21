@@ -186,3 +186,14 @@
 "Enable this app in Bluetooth, then select this Mac on your iPhone or watch." = "在「蓝牙」中打开下方 App 的开关，再到 iPhone 或手表上选择这台 Mac。";
 "Optional for sharing while the MacBook lid is closed." = "可选，仅在 MacBook 合盖共享时使用。";
 "In System Settings, allow the AirPointer background service under Login Items. Return here to check its status." = "在系统设置的「登录项」中允许 AirPointer 后台服务，然后返回这里查看状态。";
+"AirPointer Permission Guide" = "AirPointer 授权引导";
+"Enable AirPointer in Local Network. If missing, start sharing from your paired iPhone." = "在「本地网络」中打开 AirPointer。找不到时，从已配对的 iPhone 发起共享。";
+"Drag this app into the settings list if missing, then turn on its switch." = "如果列表里没有这个 App，请把它拖入列表，然后打开开关。";
+
+"Hold the pointer over the + button for one second." = "将指针停在「＋」按钮上一秒钟。";
+"Align to +" = "对齐＋";
+
+"Accessibility allowed" = "辅助功能已允许";
+"Mouse events pending" = "当前进程尚未取得鼠标事件权限";
+"Recheck Mouse Access" = "重新检查鼠标权限";
+"Reopen AirPointer" = "重新打开 AirPointer";

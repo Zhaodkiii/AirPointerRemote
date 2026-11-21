@@ -1,4 +1,12 @@
+#!/usr/bin/env python3
+import os
+import sys
 from pathlib import Path
+
+# dmgbuild supplies defines when loading this file as Finder layout settings.
+if __name__ == "__main__" and "defines" not in globals():
+    builder = Path(__file__).resolve().with_name("build-mac-dmg.sh")
+    os.execv(builder, [str(builder), *sys.argv[1:]])
 
 app = Path(defines["app"])
 

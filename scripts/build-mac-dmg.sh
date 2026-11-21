@@ -6,10 +6,10 @@ output_dir="$project_dir/DerivedData/WebsiteRelease"
 team_id="4AN6PV98G7"
 signing_identity="Developer ID Application: daokai hua ($team_id)"
 notary_profile="${AIRPOINTER_NOTARY_PROFILE:-}"
-edition="${1:---direct}"
+edition="${1:---standard}"
 if [[ ${1:-} == --help ]]; then
     echo "Usage: [AIRPOINTER_NOTARY_PROFILE=profile] ./scripts/build-mac-dmg.sh [--direct|--standard]"
-    echo "The direct edition includes Closed-Lid Desktop. Use --standard for the iPhone installer resource."
+    echo "Default: rebuild the standard Mac app and refresh the iPhone installer resource. Use --direct for Closed-Lid Desktop."
     echo "With a profile, notarizes the final DMG. Otherwise, Xcode notarizes the app inside it."
     exit 0
 fi
