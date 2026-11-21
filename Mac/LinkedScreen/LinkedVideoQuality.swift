@@ -4,6 +4,7 @@ struct LinkedVideoQuality {
     struct Profile: Equatable {
         let bitrate: Int
         let fps: Int
+        var longEdge: Int { bitrate <= 1_000_000 ? 960 : 1280 }
     }
 
     static let profiles = [

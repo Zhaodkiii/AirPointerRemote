@@ -75,6 +75,7 @@ struct LinkedWorkspace: View {
     @State private var hideFullScreenTools = false
     @AppStorage("linked.previewHintSeen") private var previewHintSeen = false
     @State private var showPreviewHint = false
+    @State private var showDiagnostics = false
     @State private var confirmDelete = false
     @State private var confirmPaste = false
     @State private var showFieldRequired = false
@@ -122,7 +123,39 @@ struct LinkedWorkspace: View {
         } message: {
             Text("Click a text field on the shared Mac to use the keyboard.")
         }
+        .sheet(isPresented: $showDiagnostics) {
+            NavigationStack {
+                List {
+                    if let metrics = client.diagnostics {
+                        Section("Last 60 seconds") {
+                            LabeledContent("Player input", value: String(format: "%.1f FPS", metrics.fps))
+                            LabeledContent("Displayed frames", value: metrics.displayFPS.map { String(format: "%.1f FPS", $0) } ?? "—")
+                            LabeledContent("Longest arrival gap", value: milliseconds(metrics.longestGapMS))
+                            LabeledContent("Slowest receive to enqueue", value: milliseconds(metrics.enqueueMS))
+                            LabeledContent("Touch round trip (95th percentile)", value: milliseconds(metrics.touchMS))
+                        }
+                        Section("Latest Mac sample") {
+                            if let id = metrics.frameID { LabeledContent("Frame ID", value: String(id)) }
+                            LabeledContent("iPhone receive to enqueue", value: milliseconds(metrics.phoneMS))
+                            LabeledContent("Encoding", value: milliseconds(metrics.encodeMS))
+                            LabeledContent("Send to acknowledgement", value: milliseconds(metrics.ackMS))
+                            LabeledContent("Video size", value: metrics.resolution)
+                            LabeledContent("Transport") { Text(metrics.split ? "Separate video and control" : "Shared connection") }
+                        }
+                        Text("A still desktop may produce no new frames. Move a window while comparing connection quality. Touch latency is measured during input.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else { Text("Waiting for video measurements…") }
+                }
+                .navigationTitle("Stream Diagnostics")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { Button("Done") { showDiagnostics = false } }
+            }
+        }
         .onDisappear { releaseLeft() }
+    }
+
+    private func milliseconds(_ value: Double?) -> String {
+        value.map { String(format: "%.0f ms", $0) } ?? "—"
     }
 
     private var options: some View {
@@ -147,6 +180,7 @@ struct LinkedWorkspace: View {
             Button("Zoom Out", systemImage: "minus.magnifyingglass") {
                 zoomRequest = .init(factor: 1 / 1.5)
             }.disabled(!client.previewZoomed)
+            Button("Stream Diagnostics", systemImage: "waveform.path.ecg") { releaseLeft(); showDiagnostics = true }
             if let videoQuality = client.videoQuality { Text(videoQuality) }
             Button("Fit Display") { fitPreview() }.disabled(!client.previewZoomed)
             Button("Click at Pointer") { client.control(.init(.currentClick)) }.disabled(!client.canPoint)

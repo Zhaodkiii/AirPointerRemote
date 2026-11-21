@@ -41,6 +41,21 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
 
     private var listener: NWListener?
     private var channel: LinkedChannel?
+    private var sessionOffer: LinkedOffer?
+    private var videoListener: NWListener?
+    private var videoLink: LinkedChannel?
+    private var videoCandidate: LinkedChannel?
+    private var videoTicket: UUID?
+    private var splitVideo = false
+    private var supportsSplit = false
+    private var nextVideoAttempt: TimeInterval = 0
+    private var videoAttemptDeadline: TimeInterval = 0
+    private var frameSequence: UInt64 = 0
+    private var lastEncodeMS: Double?
+    private var lastAckMS: Double?
+    private var lastPhoneMS: Double?
+    private var lastFrameID: UInt64?
+    private var videoRepairDeadline: TimeInterval?
     private var stream: SCStream?
     private var encoder: LinkedEncoder?
     private var pending: CMSampleBuffer?
@@ -54,6 +69,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     // TCP preserves frame order. Keep the pipeline bounded while retaining
     // the latest unencoded sample when the receiver falls behind.
     private struct Frame {
+        let id: UInt64?
         let started: TimeInterval
         let generation: Int
         var sent: TimeInterval?
@@ -156,6 +172,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
 
     func start(_ offer: LinkedOffer, chooseDisplay: Bool = false, supportsTransportResume: Bool = false) {
         guard !ended else { return }
+        sessionOffer = offer
         phoneSupportsTransportResume = supportsTransportResume
         do {
             let server = try NWListener(using: offer.parameters)
@@ -206,6 +223,84 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         observe(DistributedNotificationCenter.default(), .init("com.apple.screenIsLocked"))
         observe(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification)
         timer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in self?.tick() }
+    }
+
+    private func clearVideoLane() {
+        videoTicket = nil
+        videoListener?.cancel()
+        videoListener = nil
+        videoCandidate?.onClose = nil
+        videoCandidate?.close()
+        videoCandidate = nil
+        videoLink?.onClose = nil
+        videoLink?.close()
+        videoLink = nil
+    }
+
+    private func discardVideoBacklog() {
+        if videoRepairDeadline == nil { videoRepairDeadline = ProcessInfo.processInfo.systemUptime + 14 }
+        transportGeneration += 1
+        generation += 1
+        frames.removeAll()
+        encoding = false
+        awaitingForegroundFrame = true
+        recoveringFromDelay = true
+        resetInputForNewFrame()
+        pending = latestSample
+        readyAfterDrain = readyMessage
+        deadline = Date().addingTimeInterval(networkTimeout)
+    }
+
+    private func offerVideoLane(at now: TimeInterval) {
+        guard let sessionOffer, videoListener == nil, videoLink == nil, now >= nextVideoAttempt else { return }
+        nextVideoAttempt = now + 4
+        videoAttemptDeadline = now + 3
+        let ticket = UUID()
+        let offer = sessionOffer.videoOffer(ticket)
+        do {
+            let server = try NWListener(using: offer.parameters)
+            videoTicket = ticket
+            videoListener = server
+            server.service = .init(name: offer.name, type: LinkedOffer.service)
+            server.stateUpdateHandler = { [weak self] state in
+                guard let self, self.videoTicket == ticket else { return }
+                switch state {
+                case .ready:
+                    var invitation = LinkedMessage(.alive)
+                    invitation.videoTicket = ticket
+                    self.channel?.send(invitation)
+                case .failed: self.clearVideoLane()
+                default: break
+                }
+            }
+            server.newConnectionHandler = { [weak self] connection in
+                guard let self, self.videoTicket == ticket, self.videoCandidate == nil,
+                      self.videoLink == nil else { connection.cancel(); return }
+                let link = LinkedChannel(connection)
+                self.videoCandidate = link
+                link.onReady = { [weak self, weak link] in
+                    guard let self, let link, self.videoCandidate === link else { return }
+                    self.videoCandidate = nil
+                    self.videoLink = link
+                    self.videoListener?.cancel()
+                    self.videoListener = nil
+                    self.splitVideo = true
+                    self.nextVideoAttempt = ProcessInfo.processInfo.systemUptime + 4
+                    self.discardVideoBacklog()
+                    self.encodeLatest()
+                }
+                link.onClose = { [weak self, weak link] _ in
+                    guard let self, let link else { return }
+                    if self.videoCandidate === link { self.videoCandidate = nil }
+                    if self.videoLink === link {
+                        self.clearVideoLane()
+                        self.discardVideoBacklog()
+                    }
+                }
+                link.start()
+            }
+            server.start(queue: .main)
+        } catch { videoLog.error("Could not start video listener") }
     }
 
     private func observe(_ center: NotificationCenter, _ name: Notification.Name) {
@@ -356,6 +451,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
 
     func pauseForBackground() {
         guard !ended, readyMessage != nil, backgroundDeadline == nil else { return }
+        videoRepairDeadline = nil
         backgroundDeadline = ProcessInfo.processInfo.systemUptime + PhoneProtocol.LinkedLifecycle.grace
         pending = nil
         resetQualityMeasurements()
@@ -513,6 +609,10 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             detachedDeadline = ProcessInfo.processInfo.systemUptime + 30
             videoLog.notice("Lid Desktop transport interrupted; keeping display: \(reason, privacy: .public)")
         }
+        clearVideoLane()
+        splitVideo = false
+        videoRepairDeadline = nil
+        supportsSplit = false
         let oldLink = channel
         channel = nil
         channelReady = false
@@ -869,12 +969,14 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private func encodeLatest() {
         guard channelReady, backgroundDeadline == nil, !playbackPaused else { return }
         if lidRecoveryDeadline != nil, pending == nil { return }
-        if let ready = readyAfterDrain {
+        guard !splitVideo || videoLink != nil else { return }
+        if var ready = readyAfterDrain {
             guard frames.isEmpty else { return }
             readyAfterDrain = nil
-            channel?.send(ready)
+            ready.videoEpoch = splitVideo ? generation : nil
+            (videoLink ?? channel)?.send(ready)
         }
-        guard !encoding, frames.count < frameCapacity, let sample = pending, let encoder else { return }
+        guard !encoding, frames.count < frameCapacity, let sample = pending, var encoder, let image = sample.imageBuffer else { return }
         if awaitingForegroundFrame, !frames.isEmpty { return }
         let started = ProcessInfo.processInfo.systemUptime
         let fps = viewingOnly ? 30 : quality.profile.fps
@@ -891,13 +993,27 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         }
         let frameInterval = 1 / Double(fps)
         nextEncodeTime = max(nextEncodeTime + frameInterval, started + frameInterval / 2)
+        let width = CVPixelBufferGetWidth(image), height = CVPixelBufferGetHeight(image)
+        let scale = min(1, Double(quality.profile.longEdge) / Double(max(width, height)))
+        let w = max(2, Int(Double(width) * scale) / 2 * 2)
+        let h = max(2, Int(Double(height) * scale) / 2 * 2)
+        var resized = false
+        if encoder.width != w || encoder.height != h,
+           let replacement = LinkedEncoder(width: w, height: h), replacement.setBitRate(videoBitRate) {
+            replacement.setExpectedFrameRate(fps)
+            self.encoder = replacement
+            encoder = replacement
+            resized = true
+        }
         pending = nil
         encoding = true
         let frameGeneration = generation
         let transportVersion = transportGeneration
         if frames.isEmpty { deadline = Date().addingTimeInterval(networkTimeout) }
-        frames.append(Frame(started: started, generation: frameGeneration))
-        encoder.encode(sample, keyFrame: awaitingForegroundFrame && frames.count == 1) { [weak self] data in
+        frameSequence += 1
+        let id = splitVideo ? frameSequence : nil
+        frames.append(Frame(id: id, started: started, generation: frameGeneration))
+        encoder.encode(sample, keyFrame: resized || (awaitingForegroundFrame && frames.count == 1)) { [weak self] data in
             guard let self, !ended, transportVersion == transportGeneration else { return }
             guard let data else {
                 encoding = false
@@ -910,18 +1026,30 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             frames[frames.count - 1].sent = ProcessInfo.processInfo.systemUptime
             encoding = false
             sentBytes += data.count
-            channel?.send(data, frame: true)
+            if let id {
+                var packet = Data()
+                packet.appendInteger(id)
+                packet.append(data)
+                videoLink?.send(packet, frame: true)
+            } else { channel?.send(data, frame: true) }
             encodeLatest()
         }
     }
 
-    private func acknowledgeFrame(enqueued: Bool) {
+    private func acknowledgeFrame(_ ack: LinkedMessage) {
         protectDelayedInput()
-        guard let frame = frames.first, let sent = frame.sent else { return }
+        guard let frame = frames.first, frame.id == ack.frameID, let sent = frame.sent else { return }
         frames.removeFirst()
         let now = ProcessInfo.processInfo.systemUptime
         let acknowledgement = now - sent
-        let currentPicture = enqueued && frame.generation == generation
+        lastEncodeMS = (sent - frame.started) * 1000
+        lastAckMS = acknowledgement * 1000
+        lastFrameID = frame.id
+        lastPhoneMS = ack.enqueuedAt.flatMap { end in ack.receivedAt.map { max(0, end - $0) * 1000 } }
+        if let id = frame.id, let received = ack.receivedAt, let enqueued = ack.enqueuedAt {
+            videoLog.debug("Frame id=\(id) mac_start=\(frame.started) sent=\(sent) ack=\(now) phone_received=\(received) enqueued=\(enqueued)")
+        }
+        let currentPicture = ack.frameEnqueued != false && frame.generation == generation
         if currentPicture && !awaitingForegroundFrame && backgroundDeadline == nil && !playbackPaused {
             if !viewingOnly { quality.record(now: now, delay: acknowledgement) }
         }
@@ -935,9 +1063,20 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             lastSlowFrameLog = now
             let encodingMilliseconds = Int((sent - frame.started) * 1000)
             let acknowledgementMilliseconds = Int(acknowledgement * 1000)
-            videoLog.notice("Slow frame: encode \(encodingMilliseconds) ms, send to ACK \(acknowledgementMilliseconds) ms, \(self.frames.count) pending")
+            let localMS = lastPhoneMS ?? -1
+            videoLog.notice("Slow frame id=\(frame.id ?? 0) phone_enqueue_ms=\(localMS): encode \(encodingMilliseconds) ms, send to ACK \(acknowledgementMilliseconds) ms, \(self.frames.count) pending")
+        }
+        if currentPicture, awaitingForegroundFrame, backgroundDeadline == nil,
+           !viewingOnly, !playbackPaused, pending != nil, now - frame.started >= 0.6 {
+            // A newer sample already exists. Show the late keyframe but keep clicks gated.
+            generation += 1
+            readyAfterDrain = readyMessage
+            recoveringFromDelay = true
+            encodeLatest()
+            return
         }
         if backgroundDeadline == nil, currentPicture {
+            videoRepairDeadline = nil
             if lidRecoveryDeadline != nil, stream != nil {
                 lidRecoveryDeadline = nil
                 videoLog.notice("Lid Desktop capture recovered and first frame acknowledged")
@@ -993,19 +1132,29 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             }
             return
         }
+        let clock = ProcessInfo.processInfo.systemUptime
+        if supportsSplit, readyMessage != nil, !playbackPaused {
+            if videoListener != nil && clock >= videoAttemptDeadline { clearVideoLane() }
+            if videoLink != nil, let sent = frames.first?.sent, clock - sent >= 1.2, clock >= nextVideoAttempt {
+                clearVideoLane()
+                discardVideoBacklog()
+                videoLog.notice("Rebuilding delayed video connection; control remains active")
+            }
+            offerVideoLane(at: clock)
+        }
         if (stream == nil || !frames.isEmpty || !hasPicture || (awaitingForegroundFrame && !playbackPaused)),
-           Date() > deadline {
+           videoRepairDeadline.map({ clock >= $0 }) ?? (Date() > deadline) {
             if canResumeTransport && everAcknowledgedPicture { detachTransport("Video frame timed out.") }
             else { stop("Sharing timed out. Try again.", lidReconnect: integratedLid && hasPicture) }
             return
         }
-        guard hasPicture else { return }
+        guard hasPicture || (splitVideo && readyMessage != nil) else { return }
         if Date().timeIntervalSince(lastHeartbeat) > (canResumeTransport ? networkTimeout : 3) {
             if canResumeTransport { detachTransport("iPhone heartbeat timed out.") }
             else { stop("iPhone stopped responding.", lidReconnect: integratedLid) }
             return
         }
-        if !viewingOnly, !playbackPaused, hasPicture {
+        if !viewingOnly, !playbackPaused {
             evaluateQuality()
         }
         protectDelayedInput()
@@ -1032,9 +1181,16 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             }
         }
         let canControl = displayID != nil && access && acceptsLinkedInput && !viewingOnly
-        var heartbeat = LinkedMessage(.alive, x: canControl && !awaitingForegroundFrame && !pictureDelayed ? 1 : 0)
+        var heartbeat = LinkedMessage(.alive, x: hasPicture && canControl && !awaitingForegroundFrame && !pictureDelayed ? 1 : 0)
         heartbeat.videoDelayed = canControl && pictureDelayed
         heartbeat.videoBitrate = videoBitRate
+        heartbeat.controlStamp = now
+        heartbeat.frameID = lastFrameID
+        heartbeat.phoneEnqueueMS = lastPhoneMS
+        heartbeat.encodeMS = lastEncodeMS
+        heartbeat.ackMS = lastAckMS
+        heartbeat.encodedWidth = encoder?.width
+        heartbeat.encodedHeight = encoder?.height
         heartbeat.videoFPS = viewingOnly ? 30 : quality.profile.fps
         heartbeat.closedLidPowerWarning = closedLidPowerWarning
         channel?.send(heartbeat)
@@ -1071,11 +1227,22 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private func handle(_ message: LinkedMessage) {
         guard !ended else { return }
         if message.kind == .stop { stop(); return }
-        if message.kind == .alive { lastHeartbeat = Date(); return }
+        defer {
+            if let probe = message.controlProbe {
+                var echo = LinkedMessage(.alive)
+                echo.probeReply = probe
+                channel?.send(echo)
+            }
+        }
+        if message.kind == .alive {
+            if message.supportsVideoLane == true { supportsSplit = true }
+            lastHeartbeat = Date()
+            return
+        }
         if message.kind == .frameAck {
             lastHeartbeat = Date()
-            acknowledgeFrame(enqueued: message.frameEnqueued != false)
-            if message.requestKeyFrame == true && canResumeTransport { requestFreshKeyFrame() }
+            acknowledgeFrame(message)
+            if message.requestKeyFrame == true && (canResumeTransport || splitVideo) { requestFreshKeyFrame() }
             return
         }
         guard backgroundDeadline == nil else { return }
@@ -1087,11 +1254,9 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             updateViewing(message.x)
             return
         }
-        guard stream != nil, lidRecoveryDeadline == nil, handoff?.awaitingFrame != true,
-              acceptsLinkedInput, !viewingOnly else { return }
-        protectDelayedInput()
         if message.kind == .dragEnd {
-            let press = mouse.held ? leftPress : nil
+            guard mouse.held else { leftPress = nil; return }
+            let press = leftPress
             leftPress = nil
             mouse.handle(.init(.leftUp))
             if let press, ProcessInfo.processInfo.systemUptime - press.time < 0.5,
@@ -1101,7 +1266,15 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             }
             return
         }
+        guard stream != nil, lidRecoveryDeadline == nil, handoff?.awaitingFrame != true,
+              acceptsLinkedInput, !viewingOnly else { return }
+        protectDelayedInput()
         let passiveMotion = message.kind == .relative && !mouse.held
+        let currentInput = message.matchesPicture(epoch: generation, now: ProcessInfo.processInfo.systemUptime)
+        guard !splitVideo || currentInput || (passiveMotion && recoveringFromDelay) else {
+            if message.kind == .insert { channel?.send(.init(.rejected, request: message.request)) }
+            return
+        }
         guard !awaitingForegroundFrame || (recoveringFromDelay && passiveMotion),
               hasPicture, passiveMotion || !pictureDelayed,
               CGPreflightPostEventAccess(), let displayID, CGDisplayIsActive(displayID) != 0,
@@ -1193,6 +1366,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         guard !ended else { return }
         videoLog.notice("Screen sharing ended: \(reason, privacy: .public)")
         ended = true
+        clearVideoLane()
         if Self.sharing === self { Self.sharing = nil }
         timer?.invalidate()
         for (center, observer) in observers { center.removeObserver(observer) }

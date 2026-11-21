@@ -1,3 +1,4 @@
+import AVFoundation
 import CryptoKit
 import Network
 import VideoToolbox
@@ -6,6 +7,13 @@ import Foundation
 /// Loopback exercise using the same TLS, framing and H.264 path as a physical pairing.
 @main struct LinkedScreenChecks {
     private static func verifyAdaptiveQuality() {
+        var click = LinkedMessage(.click)
+        click.videoEpoch = 4
+        click.controlStamp = 10
+        precondition(click.matchesPicture(epoch: 4, now: 10.4))
+        precondition(!click.matchesPicture(epoch: 5, now: 10.4))
+        precondition(!click.matchesPicture(epoch: 4, now: 9))
+        precondition(!click.matchesPicture(epoch: 4, now: 12))
         var quality = LinkedVideoQuality()
         precondition(quality.evaluate(now: 1, oldestAge: 0.36, windowFull: true) == 1)
         quality.applied(1, at: 1)
@@ -15,7 +23,7 @@ import Foundation
         precondition(quality.evaluate(now: 6, oldestAge: 0.6, windowFull: true) == nil)
         precondition(quality.evaluate(now: 7, oldestAge: 0.6, windowFull: true) == 3)
         quality.applied(3, at: 7)
-        precondition(quality.profile.fps == 20)
+        precondition(quality.profile.fps == 20 && quality.profile.longEdge == 960)
         precondition(quality.evaluate(now: 25, oldestAge: 0, windowFull: false) == nil)
         for second in 26...36 {
             for _ in 0..<10 { quality.record(now: Double(second), delay: 0.045) }
@@ -24,9 +32,9 @@ import Foundation
         }
     }
 
-    private static func makeSample(height: Int) -> CMSampleBuffer {
+    private static func makeSample(width: Int = 320, height: Int) -> CMSampleBuffer {
         var pixels: CVPixelBuffer?
-        precondition(CVPixelBufferCreate(nil, 320, height, kCVPixelFormatType_32BGRA,
+        precondition(CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_32BGRA,
             [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &pixels) == 0)
         var format: CMVideoFormatDescription?
         CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: pixels!, formatDescriptionOut: &format)
@@ -41,6 +49,7 @@ import Foundation
         verifyAdaptiveQuality()
         let offer = LinkedOffer(key: SymmetricKey(size: .bits256), first: 1, second: 2)
         try verifyWrongKeyIsRefused(offer)
+        try verifyIndependentVideo(offer)
         let listener = try NWListener(using: offer.parameters)
         var server: LinkedChannel?
         var client: LinkedChannel?
@@ -155,6 +164,107 @@ import Foundation
         listener.cancel(); server?.close(); client?.close()
         print("Passed: wrong PSK rejected, TLS-PSK localhost and reconnect on the same listener, Unicode control, H.264 encode/transport/decode, fresh decoder after resume, display switching in both directions on the same connection, frame acknowledgement.")
     }
+    private static func verifyIndependentVideo(_ offer: LinkedOffer) throws {
+        let controlServer = try NWListener(using: offer.parameters)
+        var videoServer: NWListener?
+        var control: LinkedChannel?
+        var video: LinkedChannel?
+        var phone: LinkedVideoStream?
+        let layer = AVSampleBufferDisplayLayer()
+        let encoders = [LinkedEncoder(width: 960, height: 540)!, LinkedEncoder(width: 1280, height: 720)!]
+        let sample = makeSample(width: 1280, height: 720)
+        var latestAck: UInt64 = 0
+        var released = false
+        var measured = false
+        var controlConnections = 0
+
+        func inviteVideo(id: UInt64) throws {
+            let ticket = UUID()
+            let credentials = offer.videoOffer(ticket)
+            let listener = try NWListener(using: credentials.parameters)
+            listener.service = .init(name: credentials.name, type: LinkedOffer.service)
+            videoServer = listener
+            listener.stateUpdateHandler = { state in
+                if case .ready = state {
+                    var message = LinkedMessage(.alive)
+                    message.videoTicket = ticket
+                    control?.send(message)
+                }
+            }
+            listener.newConnectionHandler = { connection in
+                let lane = LinkedChannel(connection)
+                video = lane
+                lane.onReady = {
+                    var ready = LinkedMessage(.ready, x: 1280, y: 720)
+                    ready.videoEpoch = Int(id)
+                    lane.send(ready)
+                    let encoder = encoders[Int(id - 1)]
+                    encoder.encode(sample, keyFrame: true) { data in
+                        guard let data, let decoded = LinkedDecoder().sample(from: data) else {
+                            preconditionFailure("Resized keyframe could not be decoded")
+                        }
+                        precondition(decoded.formatDescription?.dimensions.width == Int32(encoder.width))
+                        var packet = Data()
+                        packet.appendInteger(id)
+                        packet.append(data)
+                        lane.send(packet, frame: true)
+                    }
+                }
+                lane.start()
+            }
+            listener.start(queue: .main)
+        }
+
+        controlServer.newConnectionHandler = { connection in
+            controlConnections += 1
+            let peer = LinkedChannel(connection)
+            control = peer
+            peer.onMessage = { message in
+                if message.kind == .alive, message.supportsVideoLane == true, videoServer == nil {
+                    try! inviteVideo(id: 1)
+                } else if message.kind == .frameAck {
+                    precondition(message.frameID == latestAck + 1 && message.frameEnqueued == true)
+                    precondition(message.receivedAt! <= message.enqueuedAt!)
+                    latestAck += 1
+                    if latestAck == 1 {
+                        videoServer?.cancel()
+                        video?.close()
+                    }
+                } else if message.kind == .dragEnd {
+                    released = true
+                    var echo = LinkedMessage(.alive)
+                    echo.probeReply = message.controlProbe
+                    peer.send(echo)
+                    try! inviteVideo(id: 2)
+                }
+            }
+            peer.start()
+        }
+        controlServer.stateUpdateHandler = { state in
+            guard case .ready = state else { return }
+            let connection = NWConnection(host: "127.0.0.1", port: controlServer.port!, using: offer.parameters)
+            let stream = LinkedVideoStream(connection, offer: offer, renderer: layer.sampleBufferRenderer)
+            phone = stream
+            stream.onVideoRecovery = { stream.send(.init(.dragEnd)) }
+            stream.onDiagnostics = { measured = $0.split && $0.fps > 0 && $0.touchMS != nil }
+            stream.start()
+        }
+        controlServer.start(queue: .main)
+        let end = Date().addingTimeInterval(15)
+        while Date() < end && !(latestAck == 2 && measured) {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        precondition(latestAck == 2 && released && measured && controlConnections == 1,
+                     "Independent video recovery, release or diagnostics failed")
+        phone?.onVideoRecovery = nil
+        phone?.close()
+        control?.close()
+        video?.close()
+        controlServer.cancel()
+        videoServer?.cancel()
+        print("Passed: authenticated video replacement, release over surviving control link, timed frame IDs, diagnostics, 1280→960→1280 H.264.")
+    }
+
     private static func verifyWrongKeyIsRefused(_ offer: LinkedOffer) throws {
         let server = try NWListener(using: offer.parameters)
         let wrong = LinkedOffer(key: SymmetricKey(size: .bits256), first: 1, second: 2)

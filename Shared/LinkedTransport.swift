@@ -18,6 +18,12 @@ struct LinkedOffer {
         name = "AirPointer-" + SHA256.hash(data: self.key).prefix(12).map { String(format: "%02x", $0) }.joined()
     }
 
+    func videoOffer(_ ticket: UUID) -> LinkedOffer {
+        let secret = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: key),
+            salt: Data(ticket.uuidString.utf8), info: Data("AirPointer video lane v1".utf8), outputByteCount: 32)
+        return LinkedOffer(key: secret, first: 0, second: 0)
+    }
+
     var parameters: NWParameters {
         let tls = NWProtocolTLS.Options()
         let options = tls.securityProtocolOptions
@@ -64,6 +70,26 @@ struct LinkedMessage: Codable {
     var videoDelayed: Bool?
     var videoBitrate: Int?
     var videoFPS: Int?
+    var supportsVideoLane: Bool?
+    var videoTicket: UUID?
+    var videoEpoch: Int?
+    // The iPhone echoes the last Mac heartbeat. Both ends of the age calculation use the Mac clock.
+    var controlStamp: Double?
+    func matchesPicture(epoch: Int, now: TimeInterval) -> Bool {
+        guard videoEpoch == epoch, let controlStamp else { return false }
+        return (0...1.2).contains(now - controlStamp)
+    }
+
+    var frameID: UInt64?
+    var receivedAt: Double?
+    var enqueuedAt: Double?
+    var controlProbe: UUID?
+    var probeReply: UUID?
+    var encodeMS: Double?
+    var ackMS: Double?
+    var phoneEnqueueMS: Double?
+    var encodedWidth: Int?
+    var encodedHeight: Int?
     var kind: Kind
     var x: Double = 0
     var y: Double = 0
@@ -99,18 +125,20 @@ final class LinkedChannel {
         connection.start(queue: queue)
     }
 
-    func send(_ message: LinkedMessage) {
-        if let data = try? JSONEncoder().encode(message) { send(data, frame: false) }
+    func send(_ message: LinkedMessage, processed: (() -> Void)? = nil) {
+        guard let data = try? JSONEncoder().encode(message) else { processed?(); return }
+        send(data, frame: false, processed: processed)
     }
 
-    func send(_ payload: Data, frame: Bool) {
-        guard !closed, payload.count < Self.limit else { return }
+    func send(_ payload: Data, frame: Bool, processed: (() -> Void)? = nil) {
+        guard !closed, payload.count < Self.limit else { processed?(); return }
         var bytes = Data()
         bytes.appendInteger(UInt32(payload.count + 1))
         bytes.append(frame ? 1 : 0)
         bytes.append(payload)
         connection.send(content: bytes, completion: .contentProcessed { [weak self] error in
             if let error { self?.close(error.localizedDescription) }
+            processed?()
         })
     }
 

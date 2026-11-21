@@ -4,8 +4,12 @@ import Foundation
 /// One AVCC access unit per packet. SPS/PPS travel with the frame so the receiver can initialize immediately.
 final class LinkedEncoder {
     static let desktopBitRate = 3_000_000
+    let width: Int
+    let height: Int
     private var encoder: VTCompressionSession?
     init?(width: Int, height: Int) {
+        self.width = width
+        self.height = height
         guard VTCompressionSessionCreate(allocator: nil, width: Int32(width), height: Int32(height),
             codecType: kCMVideoCodecType_H264, encoderSpecification: nil, imageBufferAttributes: nil,
             compressedDataAllocator: nil, outputCallback: nil, refcon: nil, compressionSessionOut: &encoder) == noErr,

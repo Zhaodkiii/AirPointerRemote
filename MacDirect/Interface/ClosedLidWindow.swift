@@ -3,12 +3,13 @@ import SwiftUI
 
 final class ClosedLidWindow {
     static let shared = ClosedLidWindow()
+    var openPermissions: ((String) -> Void)?
     private var window: NSWindow?
 
     func show() {
         ClosedLidDesktop.shared.refresh()
         if window == nil {
-            let controller = NSHostingController(rootView: ClosedLidSettings(desktop: .shared))
+            let controller = NSHostingController(rootView: ClosedLidSettings(desktop: .shared, openPermissions: { [weak self] in self?.openPermissions?($0) }))
             let window = NSWindow(contentViewController: controller)
             window.title = String(localized: "Closed-Lid Desktop")
             window.styleMask = [.titled, .closable]
@@ -23,6 +24,7 @@ final class ClosedLidWindow {
 
 private struct ClosedLidSettings: View {
     @ObservedObject var desktop: ClosedLidDesktop
+    let openPermissions: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -46,16 +48,16 @@ private struct ClosedLidSettings: View {
             if desktop.enabled && desktop.supported {
                 VStack(spacing: 0) {
                     permission("Screen Recording", icon: "display", allowed: desktop.recordingAllowed, button: "Open Settings") {
-                        openPrivacy("Privacy_ScreenCapture", request: CGRequestScreenCaptureAccess)
+                        openPermissions("screen")
                     }
                     Divider()
                     permission("Pointer Control", icon: "cursorarrow", allowed: desktop.pointerAllowed, button: "Open Settings") {
-                        openPrivacy("Privacy_Accessibility", request: CGRequestPostEventAccess)
+                        openPermissions("accessibility")
                     }
                     Divider()
                     permission("Closed-Lid Power", icon: "bolt.circle", allowed: desktop.powerStatus == .enabled,
                                button: desktop.powerStatus == .requiresApproval ? "Approve in Settings" : "Set Up",
-                               action: desktop.setupPower)
+                               action: { openPermissions("power") })
                 }
                 .padding(.horizontal, 12)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
@@ -124,11 +126,5 @@ private struct ClosedLidSettings: View {
             }
         }
         .frame(minHeight: 42)
-    }
-
-    private func openPrivacy(_ pane: String, request: () -> Bool) {
-        if !request(), let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?" + pane) {
-            NSWorkspace.shared.open(url)
-        }
     }
 }

@@ -32,6 +32,9 @@ final class LinkedClient: ObservableObject {
     private var pendingKeyboardClick: (id: UUID, time: TimeInterval)?
     let video = AVSampleBufferDisplayLayer()
     private weak var phone: PhoneConnection?
+    @Published private(set) var diagnostics: VideoDiagnostics?
+    private var videoEpoch: Int?
+    private var controlStamp: Double?
     private var channel: LinkedVideoStream?
     private var browser: NWBrowser?
     private var timeout: Timer?
@@ -184,12 +187,20 @@ final class LinkedClient: ObservableObject {
     }
 
     private func connect(_ connection: NWConnection) {
-        let link = LinkedVideoStream(connection, renderer: video.sampleBufferRenderer)
+        guard let offer else { connection.cancel(); return }
+        videoEpoch = nil
+        controlStamp = nil
+        diagnostics = nil
+        let link = LinkedVideoStream(connection, offer: offer, renderer: video.sampleBufferRenderer)
+        link.onDiagnostics = { [weak self, weak link] metrics in
+            guard let self, let link, self.channel === link else { return }
+            self.diagnostics = metrics
+        }
         link.onVideoRecovery = { [weak self, weak link] in
             guard let self, let link, self.channel === link else { return }
             self.canPoint = false
             self.resuming = true
-            self.deadline = Date().addingTimeInterval(8)
+            self.deadline = Date().addingTimeInterval(15)
         }
         channel = link
         link.onClose = { [weak self, weak link] reason in
@@ -230,6 +241,8 @@ final class LinkedClient: ObservableObject {
                 ? String(localized: "Preparing Lid Desktop on your Mac…")
                 : String(localized: "Choose the display to share on your Mac.")
         case .ready:
+            if videoEpoch != message.videoEpoch { canPoint = false }
+            videoEpoch = message.videoEpoch
             let oldLidDisplay = closedLidDesktop
             closedLidDesktop = message.closedLidDesktop == true
             transportResume = message.transportResume == true
@@ -264,6 +277,7 @@ final class LinkedClient: ObservableObject {
             let remaining = transportDeadline.map { max(0, $0 - ProcessInfo.processInfo.systemUptime) } ?? 12
             deadline = Date().addingTimeInterval(min(12, remaining))
         case .alive:
+            controlStamp = message.controlStamp
             guard pausedAt == nil, !resuming else { return }
             deadline = Date().addingTimeInterval(transportResume ? 11 : 5)
             let delayed = message.videoDelayed == true && pipState == .idle
@@ -456,6 +470,7 @@ final class LinkedClient: ObservableObject {
         pendingKeyboardClick = nil
         focus = nil; submitting = nil; canPoint = false
         videoDelayed = false
+        diagnostics = nil
         videoQuality = nil
         if keepDraft && !draft.isEmpty {
             target = nil
@@ -493,6 +508,8 @@ final class LinkedClient: ObservableObject {
         guard uiActive, live, canPoint || (videoDelayed && command.kind == .relative) else { return }
         if command.kind == .gesture && !supportsGestures { return }
         var message = command
+        message.videoEpoch = videoEpoch
+        message.controlStamp = controlStamp
         switch message.kind {
         case .click, .doubleClick, .currentClick, .currentDouble: markKeyboardClick(&message)
         case .currentDown, .dragStart, .rightClick, .currentRight: pendingKeyboardClick = nil
@@ -541,6 +558,8 @@ final class LinkedClient: ObservableObject {
         submitting = id
         var command = LinkedMessage(.insert, token: focus, request: id, text: "")
         command.readSelection = true
+        command.videoEpoch = videoEpoch
+        command.controlStamp = controlStamp
         channel?.send(command)
     }
     func insert(deleting: Bool = false) {
@@ -556,6 +575,8 @@ final class LinkedClient: ObservableObject {
         command.styles = styles.isEmpty ? nil : styles
         command.selection = selectionID
         submitting = id
+        command.videoEpoch = videoEpoch
+        command.controlStamp = controlStamp
         channel?.send(command)
     }
 }

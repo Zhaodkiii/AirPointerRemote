@@ -261,3 +261,21 @@
 
 "Reconnecting to your Mac…" = "正在重新连接 Mac…";
 "Screen sharing could not reconnect. Try sharing again." = "屏幕共享未能恢复，请重新开始共享。";
+"Stream Diagnostics" = "图传诊断";
+"Last 60 seconds" = "最近 60 秒";
+"Player input" = "播放器入队帧率";
+"Displayed frames" = "实际显示帧率";
+"Longest arrival gap" = "最长到帧间隔";
+"Slowest receive to enqueue" = "收帧到入队最长耗时";
+"Touch round trip (95th percentile)" = "触控往返延迟（第 95 百分位）";
+"Latest Mac sample" = "Mac 最近一次采样";
+"Encoding" = "编码耗时";
+"Send to acknowledgement" = "发送到确认";
+"Video size" = "编码分辨率";
+"Transport" = "传输方式";
+"Separate video and control" = "视频与控制独立连接";
+"Shared connection" = "共用连接";
+"Waiting for video measurements…" = "正在等待视频采样…";
+"A still desktop may produce no new frames. Move a window while comparing connection quality. Touch latency is measured during input." = "桌面静止时可能没有新帧。请连续拖动窗口来比较连接质量，操作时才会测量触控延迟。";
+"Frame ID" = "帧编号";
+"iPhone receive to enqueue" = "iPhone 收帧到入队";
