@@ -3,7 +3,7 @@ import SwiftUI
 
 final class ClosedLidWindow {
     static let shared = ClosedLidWindow()
-    var openPermissions: ((String) -> Void)?
+    var openPermissions: ((String?) -> Void)?
     private var window: NSWindow?
 
     func show() {
@@ -24,12 +24,16 @@ final class ClosedLidWindow {
 
 private struct ClosedLidSettings: View {
     @ObservedObject var desktop: ClosedLidDesktop
-    let openPermissions: (String) -> Void
+    let openPermissions: (String?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Label("Closed-Lid Desktop", systemImage: "laptopcomputer.and.iphone")
-                .font(.title2.weight(.semibold))
+            HStack {
+                Label("Closed-Lid Desktop", systemImage: "laptopcomputer.and.iphone")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Button("Permissions & Setup…") { openPermissions(nil) }
+            }
             Toggle(isOn: Binding(get: { desktop.enabled }, set: desktop.setEnabled)) {
                 Text("Enable Lid Desktop for iPhone sharing")
                     .fontWeight(.medium)

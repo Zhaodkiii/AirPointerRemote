@@ -11,8 +11,9 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_airpointer._tcp</string>
+		<string>_rfb._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connects your paired iPhone and Mac to share the display over your local network.</string>
+	<string>Finds Macs and connects to Screen Sharing on your local network.</string>
 </dict>
 </plist>

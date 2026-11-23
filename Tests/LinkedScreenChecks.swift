@@ -45,8 +45,25 @@ import Foundation
         return sample!
     }
 
+    private static func verifyAdaptiveDesktopSize() throws {
+        let portrait = AdaptiveDesktopSize(viewport: CGSize(width: 402, height: 874))!
+        let landscape = AdaptiveDesktopSize(viewport: CGSize(width: 874, height: 402))!
+        precondition(portrait.width == 804 && portrait.height == 1748)
+        precondition(landscape.width == portrait.height && landscape.height == portrait.width)
+        precondition(AdaptiveDesktopSize(viewport: CGSize(width: 1024, height: 1366))?.height == 1920)
+        precondition(AdaptiveDesktopSize(viewport: CGSize(width: CGFloat.infinity, height: 874)) == nil)
+        precondition(AdaptiveDesktopSize(viewport: CGSize(width: 120, height: 1000)) == nil)
+        var request = LinkedMessage(.alive)
+        request.adaptiveSize = portrait
+        let decoded = try JSONDecoder().decode(LinkedMessage.self, from: JSONEncoder().encode(request))
+        precondition(decoded.adaptiveSize == portrait)
+        let malformed = try JSONDecoder().decode(AdaptiveDesktopSize.self, from: Data("{\"width\":-400,\"height\":2147483647}".utf8))
+        precondition(!malformed.valid)
+    }
+
     static func main() throws {
         verifyAdaptiveQuality()
+        try verifyAdaptiveDesktopSize()
         let offer = LinkedOffer(key: SymmetricKey(size: .bits256), first: 1, second: 2)
         try verifyWrongKeyIsRefused(offer)
         try verifyIndependentVideo(offer)

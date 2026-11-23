@@ -29,6 +29,9 @@ final class LinkedClient: ObservableObject {
     // Resume only after a fresh authenticated Bluetooth connection to the same Mac.
     @Published private(set) var resumeMac: UUID?
     private var target: UUID?
+    private var focusQuery: UUID?
+    @Published var fieldRequired = false
+    @Published var sandboxedFieldUnavailable = false
     private var pendingKeyboardClick: (id: UUID, time: TimeInterval)?
     let video = AVSampleBufferDisplayLayer()
     private weak var phone: PhoneConnection?
@@ -45,6 +48,10 @@ final class LinkedClient: ObservableObject {
     private(set) var sceneInBackground = false
     var workspace: Workspace?
     var workspacePresented: Bool { workspace != nil }
+    @Published private(set) var adaptiveDesktop = false
+    private var adaptiveSize: AdaptiveDesktopSize?
+    private var adaptiveAccepted = false
+    private var adaptiveResizeTask: Task<Void, Never>?
     @Published var directTouch = false
     @Published var fullScreen = false
     private(set) var viewport = LinkedViewport()
@@ -108,8 +115,13 @@ final class LinkedClient: ObservableObject {
     var reconnectingTransport: Bool { transportDeadline != nil }
     private var retryTransport: Task<Void, Never>?
 
-    func start(_ phone: PhoneConnection, inline: Bool = false, chooseDisplay: Bool = false) {
-        guard !running, let offer = phone.beginLinkedScreen(inline: inline, chooseDisplay: chooseDisplay) else { return }
+    func start(_ phone: PhoneConnection, inline: Bool = false, chooseDisplay: Bool = false,
+               adaptive size: AdaptiveDesktopSize? = nil) {
+        guard !running, let offer = phone.beginLinkedScreen(inline: inline, chooseDisplay: chooseDisplay,
+                                                            adaptive: size != nil) else { return }
+        adaptiveDesktop = size != nil
+        adaptiveSize = size
+        adaptiveAccepted = false
         resumeMac = nil
         reconnectPhone = nil
         canRetrySharing = false
@@ -127,6 +139,24 @@ final class LinkedClient: ObservableObject {
             guard Date() > deadline else { return }
             interrupted(live ? String(localized: "Mac stopped responding. Start sharing again.") : String(localized: "Timed out. Check both apps, Local Network access and Wi-Fi, then retry."))
         }
+    }
+
+    func adaptiveViewportChanged(_ size: AdaptiveDesktopSize?) {
+        guard adaptiveDesktop, let size, size != adaptiveSize else { return }
+        adaptiveSize = size
+        adaptiveResizeTask?.cancel()
+        adaptiveResizeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(320))
+            guard !Task.isCancelled else { return }
+            self?.sendAdaptiveSize()
+        }
+    }
+
+    private func sendAdaptiveSize() {
+        guard adaptiveAccepted, let adaptiveSize else { return }
+        var message = LinkedMessage(.alive)
+        message.adaptiveSize = adaptiveSize
+        channel?.send(message)
     }
 
     private func browse(_ offer: LinkedOffer) {
@@ -236,17 +266,40 @@ final class LinkedClient: ObservableObject {
     private func receive(_ message: LinkedMessage) {
         switch message.kind {
         case .waiting:
+            if adaptiveDesktop {
+                guard message.adaptiveDesktop == true else {
+                    end(String(localized: "Update AirPointer Remote Direct on your Mac to use iPhone Desktop."))
+                    return
+                }
+                adaptiveAccepted = true
+                deadline = Date().addingTimeInterval(18)
+                status = String(localized: "Preparing iPhone Desktop on your Mac…")
+                sendAdaptiveSize()
+                return
+            }
             deadline = Date().addingTimeInterval(95)
             status = message.closedLidDesktop == true
                 ? String(localized: "Preparing Lid Desktop on your Mac…")
                 : String(localized: "Choose the display to share on your Mac.")
         case .ready:
+            if adaptiveDesktop && message.adaptiveDesktop != true {
+                end(String(localized: "Update AirPointer Remote Direct on your Mac to use iPhone Desktop."))
+                return
+            }
+            if adaptiveDesktop && live && (size.width != message.x || size.height != message.y) {
+                canPoint = false
+                resuming = true
+                focus = nil
+                target = nil
+                pendingKeyboardClick = nil
+            }
             if videoEpoch != message.videoEpoch { canPoint = false }
             videoEpoch = message.videoEpoch
             let oldLidDisplay = closedLidDesktop
             closedLidDesktop = message.closedLidDesktop == true
             transportResume = message.transportResume == true
             requiresOpenLid = message.requiresOpenLid == true
+            supportsDesktopTools = message.supportsDesktopTools == true
             supportsGestures = message.supportsGestures == true
             pipSupportedByMac = message.pictureInPicture == true
             guard pausedAt == nil else { return }
@@ -295,6 +348,12 @@ final class LinkedClient: ObservableObject {
             if canPoint != allowed { canPoint = allowed }
         case .focus:
             guard pausedAt == nil, !resuming else { return }
+            if let query = message.focusQuery {
+                guard focusQuery == query, uiActive, live else { return }
+                focusQuery = nil
+                sandboxedFieldUnavailable = message.sandboxedReceiver == true && message.token == nil
+                fieldRequired = message.token == nil
+            }
             supportsEditing = message.composerVersion == 1
             focus = message.token
             if draft.isEmpty && selectionID == nil {
@@ -307,10 +366,11 @@ final class LinkedClient: ObservableObject {
                 closeComposer()
                 return
             }
+            if message.focusQuery != nil { openKeyboard(); return }
             if let click = pendingKeyboardClick, click.id == message.keyboardClick {
                 pendingKeyboardClick = nil
-                if uiActive, live, canPoint,
-                   ProcessInfo.processInfo.systemUptime - click.time < 1 {
+                if uiActive, live,
+                   ProcessInfo.processInfo.systemUptime - click.time < 2 {
                     openKeyboard()
                 }
             }
@@ -364,6 +424,7 @@ final class LinkedClient: ObservableObject {
             end(String(localized: "Sharing paused. Resume when you’re ready."), keepDraft: true)
             return
         }
+        focusQuery = nil
         pausedAt = ProcessInfo.processInfo.systemUptime
         channel?.pause(background: true)
         resuming = true
@@ -446,6 +507,12 @@ final class LinkedClient: ObservableObject {
         retryTransport?.cancel()
         retryTransport = nil
         offer = nil
+        adaptiveResizeTask?.cancel()
+        adaptiveResizeTask = nil
+        adaptiveDesktop = false
+        supportsDesktopTools = false
+        adaptiveSize = nil
+        adaptiveAccepted = false
         closedLidDesktop = false
         requiresOpenLid = false
         closeLidHintTask?.cancel()
@@ -468,6 +535,8 @@ final class LinkedClient: ObservableObject {
         channel?.close(notifyMac: shouldSendStop); channel = nil
         phone?.finishLinkedScreen(interrupted: preserveClosedLidSession); phone = nil
         pendingKeyboardClick = nil
+        focusQuery = nil
+        fieldRequired = false
         focus = nil; submitting = nil; canPoint = false
         videoDelayed = false
         diagnostics = nil
@@ -496,6 +565,15 @@ final class LinkedClient: ObservableObject {
         channel?.send(message)
     }
 
+    @Published private(set) var supportsDesktopTools = false
+
+    func desktopTool(_ tool: LinkedMessage.DesktopTool) {
+        guard adaptiveDesktop, supportsDesktopTools else { return }
+        var message = LinkedMessage(.desktopTool)
+        message.desktopTool = tool
+        control(message)
+    }
+
     private var supportsGestures = false
 
     private func markKeyboardClick(_ message: inout LinkedMessage) {
@@ -522,6 +600,23 @@ final class LinkedClient: ObservableObject {
         UserDefaults.standard.set(enabled, forKey: "linked.keepMacAwake")
         if live { channel?.send(.init(.keepAwake, x: enabled ? 1 : 0)) }
     }
+    func requestKeyboard() {
+        guard uiActive, live else { return }
+        if focus != nil { openKeyboard(); return }
+        let id = UUID()
+        focusQuery = id
+        sandboxedFieldUnavailable = false
+        var query = LinkedMessage(.alive)
+        query.focusQuery = id
+        channel?.send(query)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, self.focusQuery == id else { return }
+            self.focusQuery = nil
+            guard self.uiActive, self.live, !self.resuming else { return }
+            if self.focus != nil { self.openKeyboard() } else { self.fieldRequired = true }
+        }
+    }
+
     func openKeyboard() {
         guard uiActive, focus != nil else { return }
         if draft.isEmpty && selectionID == nil { target = focus }

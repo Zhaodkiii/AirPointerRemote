@@ -16,6 +16,19 @@ final class LinkedFocus {
         token = nil
     }
 
+    private var preparedEditorPID: pid_t?
+
+    func prepareForClick() {
+        guard AXIsProcessTrusted(), let app = NSWorkspace.shared.frontmostApplication,
+              preparedEditorPID != app.processIdentifier else { return }
+        preparedEditorPID = app.processIdentifier
+        guard let url = app.bundleURL,
+              FileManager.default.fileExists(atPath: url.appendingPathComponent("Contents/Frameworks/Electron Framework.framework").path) else { return }
+        let owner = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(owner, 0.12)
+        AXUIElementSetAttributeValue(owner, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+    }
+
     func refresh() {
         revision += 1
         let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -56,17 +69,32 @@ final class LinkedFocus {
         let system = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(system, 0.12)
         var hit: AXUIElement?
-        guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success else { return false }
+        guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success,
+              let originalHit = hit else { return false }
         // Web editors may return a child text element for the hit.
         for _ in 0..<8 {
-            guard let current = hit else { return false }
+            guard let current = hit else { break }
             if CFEqual(current, element) { return true }
             var parent: CFTypeRef?
             guard AXUIElementCopyAttributeValue(current, kAXParentAttribute as CFString, &parent) == .success,
-                  let parent, CFGetTypeID(parent) == AXUIElementGetTypeID() else { return false }
+                  let parent, CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
             hit = (parent as! AXUIElement)
         }
-        return false
+        // Some web editors hit-test to the containing web area. Accept that case
+        // only inside the focused editable field and in the same owning process.
+        var hitPID: pid_t = 0, fieldPID: pid_t = 0
+        guard AXUIElementGetPid(originalHit, &hitPID) == .success,
+              AXUIElementGetPid(element, &fieldPID) == .success, hitPID == fieldPID else { return false }
+        func frameValue(_ attribute: String) -> AXValue? {
+            var raw: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, attribute as CFString, &raw) == .success,
+                  let raw, CFGetTypeID(raw) == AXValueGetTypeID() else { return nil }
+            return (raw as! AXValue)
+        }
+        var origin = CGPoint.zero, size = CGSize.zero
+        guard let position = frameValue(kAXPositionAttribute), let dimensions = frameValue(kAXSizeAttribute),
+              AXValueGetValue(position, .cgPoint, &origin), AXValueGetValue(dimensions, .cgSize, &size) else { return false }
+        return CGRect(origin: origin, size: size).contains(point)
     }
 
     private var snapshot: (id: UUID, range: CFRange, text: String)?
@@ -197,6 +225,32 @@ final class LinkedFocus {
         return AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString) == .success
     }
 
+    /// Only report an editable focus when the actual click hit that same element or a descendant.
+    func mirrorClickIsEditable(x: Double, y: Double) -> Bool {
+        guard let point = CGEvent(source: nil)?.location,
+              let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return false }
+        let displays = Displays.all.map { CGDisplayBounds($0) }
+        let frames = displays + [displays.reduce(CGRect.null) { $0.union($1) }]
+        guard frames.contains(where: { frame in
+            hypot(point.x - (frame.minX + x * frame.width), point.y - (frame.minY + y * frame.height)) <= 5
+        }) else { return false }
+        prepareForClick()
+        guard let field = Self.editableElement(pid: pid) else { return false }
+        var hit: AXUIElement?
+        let owner = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(owner, 0.12)
+        guard AXUIElementCopyElementAtPosition(owner, Float(point.x), Float(point.y), &hit) == .success else { return false }
+        for _ in 0..<12 {
+            guard let element = hit else { return false }
+            if CFEqual(element, field) { return true }
+            var parent: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, kAXParentAttribute as CFString, &parent) == .success,
+                  let parent, CFGetTypeID(parent) == AXUIElementGetTypeID() else { return false }
+            hit = (parent as! AXUIElement)
+        }
+        return false
+    }
+
     private static func editableElement(pid: pid_t) -> AXUIElement? {
         guard AXIsProcessTrusted(), !IsSecureEventInputEnabled() else { return nil }
         let owner = AXUIElementCreateApplication(pid)
@@ -213,7 +267,8 @@ final class LinkedFocus {
             var result = DarwinBoolean(false)
             return AXUIElementIsAttributeSettable(field, attribute as CFString, &result) == .success && result.boolValue
         }
-        guard writable(kAXSelectedTextAttribute) || writable(kAXValueAttribute) else { return nil }
+        let editable = value(field, "AXEditable") as? Bool
+        guard editable != false, editable == true || writable(kAXSelectedTextAttribute) || writable(kAXValueAttribute) else { return nil }
         return field
     }
 }

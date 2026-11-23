@@ -7,7 +7,10 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var phase
     @State private var inlineRequested = false
     @State private var linkedScreen = false
+    @State private var preferAdaptiveDesktop = false
     @AppStorage("linked.autoPictureInPicture") private var automaticPiP = true
+    @State private var pendingDesktopPair = false
+    @State private var systemDesktop = false
     @State private var settings = false
     @State private var showHelp = false
     @State private var showSetup = false
@@ -28,10 +31,15 @@ struct ContentView: View {
                     Button("Return to Shared Screen") { sharing.pictureInPicture?.restore() }
                     Button("Stop Sharing", role: .destructive) { sharing.end() }
                 }
-                connectionStatus.padding(.horizontal, inlineWorkspace ? 12 : 0)
                 if inlineWorkspace {
+                    connectionStatus.padding(.horizontal, 12)
                     LinkedWorkspace(client: sharing, inline: true, startPiP: startPiP, automaticPiP: $automaticPiP)
-                } else if connection.connected { remote } else { devices }
+                } else if connection.connected && !systemDesktop {
+                    connectionStatus
+                    remote
+                } else {
+                    connectionHome
+                }
             }
             .padding(inlineWorkspace ? 0 : 16)
             .background(Color(uiColor: .systemGroupedBackground))
@@ -44,16 +52,19 @@ struct ContentView: View {
                         .accessibilityLabel("How to Use")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        if sharing.pipState == .active { sharing.pictureInPicture?.restore(); return }
-                        controller.suspendInteraction(true)
-                        if sharing.running { connection.send(.init(.linkedInput)) }
-                        sharing.hideKeyboard()
-                        linkedScreen = true
-                    } label: {
-                        Image(systemName: "rectangle.connected.to.line.below")
+                    if !systemDesktop && (connection.connected || sharing.running || sharing.canRetrySharing) {
+                        Button {
+                            if sharing.pipState == .active { sharing.pictureInPicture?.restore(); return }
+                            controller.suspendInteraction(true)
+                            if sharing.running { connection.send(.init(.linkedInput)) }
+                            sharing.hideKeyboard()
+                            preferAdaptiveDesktop = false
+                            linkedScreen = true
+                        } label: {
+                            Image(systemName: "rectangle.connected.to.line.below")
+                        }
+                        .accessibilityLabel("Linked Screen")
                     }
-                    .accessibilityLabel("Linked Screen")
                     Button { settings = true } label: { Image(systemName: "slider.horizontal.3") }
                         .accessibilityLabel("Settings")
                 }
@@ -62,7 +73,8 @@ struct ContentView: View {
                 if sharing.pipState == .idle && !sharing.running { inlineRequested = false }
                 updateSharingPresentation()
             }) {
-                LinkedScreenView(connection: connection, client: sharing, startPiP: startPiP, automaticPiP: $automaticPiP)
+                LinkedScreenView(connection: connection, client: sharing, startPiP: startPiP, automaticPiP: $automaticPiP,
+                                 preferAdaptive: preferAdaptiveDesktop)
             }
             .onAppear {
                 let cover = $linkedScreen
@@ -103,10 +115,15 @@ struct ContentView: View {
                 updateSharingPresentation()
                 if live && linkedScreen { connection.send(.init(.linkedInput)) }
             }
+            .onChange(of: systemDesktop) { _, _ in updateInputOwner() }
             .onChange(of: settings) { _, _ in updateSharingPresentation() }
             .onChange(of: showSetup) { _, _ in updateSharingPresentation() }
             .onChange(of: showHelp) { _, _ in updateSharingPresentation() }
-            .onChange(of: connection.connected) { _, _ in sharing.connectionChanged(connection) }
+            .onChange(of: connection.connected) { _, connected in
+                sharing.connectionChanged(connection)
+                if connected && pendingDesktopPair && systemDesktop { openAdaptiveDesktop() }
+                pendingDesktopPair = false
+            }
             .onChange(of: connection.macPaused) { _, paused in
                 if paused { sharing.end(String(localized: "Control paused on the Mac.")) }
             }
@@ -129,11 +146,11 @@ struct ContentView: View {
     }
 
     private var inlineWorkspace: Bool {
-        inlineRequested && sharing.pipState != .active && !linkedScreen && (sharing.live || sharing.resuming) && !controller.holdingLeft
+        !systemDesktop && inlineRequested && sharing.pipState != .active && !linkedScreen && (sharing.live || sharing.resuming) && !controller.holdingLeft
     }
 
     private func updateInputOwner() {
-        controller.suspendInteraction(linkedScreen || inlineWorkspace || sharing.pipState != .idle || settings || showHelp || showSetup)
+        controller.suspendInteraction(systemDesktop || linkedScreen || inlineWorkspace || sharing.pipState != .idle || settings || showHelp || showSetup)
     }
 
     private func updateSharingPresentation() {
@@ -217,12 +234,83 @@ struct ContentView: View {
         }
     }
 
+    private var connectionHome: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Connect to a Mac").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { connectionChoices }
+                    VStack(spacing: 10) { connectionChoices }
+                }
+                if systemDesktop {
+                    SystemDesktopHome(
+                        connection: connection,
+                        openAdaptive: openAdaptiveDesktop,
+                        pairing: { devices }
+                    )
+                } else { devices }
+            }
+            .padding(.vertical, 8)
+        }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    @ViewBuilder private var connectionChoices: some View {
+        connectionChoice("Bluetooth Remote", subtitle: "Trackpad and air mouse", icon: "cursorarrow.motionlines", desktop: false)
+        connectionChoice("Built-in Screen Sharing", subtitle: "View and control the desktop", icon: "desktopcomputer", desktop: true)
+    }
+
+    private func connectionChoice(_ title: LocalizedStringKey, subtitle: LocalizedStringKey,
+                                  icon: String, desktop: Bool) -> some View {
+        let selected = systemDesktop == desktop
+        return Button {
+            if desktop { selectSystemDesktop() } else { systemDesktop = false }
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: icon).font(.title3)
+                    Spacer(minLength: 8)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : .secondary)
+                        .accessibilityHidden(true)
+                }
+                .foregroundStyle(Color.accentColor)
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minWidth: 122, maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(selected ? Color.accentColor : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func openAdaptiveDesktop() {
+        guard connection.connected else { return }
+        if sharing.running { sharing.end(keepDraft: true); inlineRequested = false }
+        preferAdaptiveDesktop = true
+        controller.suspendInteraction(true)
+        linkedScreen = true
+    }
+
+    private func selectSystemDesktop() {
+        if sharing.running { sharing.end(keepDraft: true); inlineRequested = false }
+        if connection.connecting && !connection.connected {
+            if connection.pairingCode != nil { connection.rejectPairing() } else { connection.disconnect() }
+        }
+        systemDesktop = true
+        updateInputOwner()
+    }
+
     private var devices: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "cursorarrow.motionlines").font(.system(size: 58)).foregroundStyle(.blue).padding(.top, 40)
-            Text("Control Your Mac Pointer").font(.title2.bold())
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Nearby Macs").font(.headline).accessibilityAddTraits(.isHeader)
             Text("Open AirPointer Remote on your Mac. Allow Bluetooth and Accessibility on the Mac, then select it below.")
-                .multilineTextAlignment(.center).foregroundStyle(.secondary)
+                .font(.subheadline).foregroundStyle(.secondary)
             if let code = connection.pairingCode {
                 VStack(spacing: 12) {
                     Text("Compare Pairing Codes").font(.headline)
@@ -234,45 +322,44 @@ struct ContentView: View {
                         .buttonStyle(.borderedProminent)
                     Button("Cancel Pairing", role: .cancel) { connection.rejectPairing() }
                 }
-                .padding()
+                .frame(maxWidth: .infinity).padding()
             } else if connection.connecting {
-                ProgressView()
-                Button("Cancel Connection") { connection.disconnect() }
+                HStack {
+                    ProgressView()
+                    Text(connection.status).font(.subheadline)
+                    Spacer(minLength: 0)
+                    Button("Cancel Connection") { connection.disconnect() }.font(.subheadline)
+                }
             } else {
                 if connection.changedMac != nil {
-                    Button("Forget and Re-pair…") { confirmNewIdentity = true }
-                        .buttonStyle(.bordered)
+                    Button("Forget and Re-pair…") { confirmNewIdentity = true }.buttonStyle(.bordered)
                 }
-                ScrollView {
-                    VStack(spacing: 10) {
-                        ForEach(connection.nearby) { mac in
-                            Button { connection.connect(mac) } label: {
-                                HStack {
-                                    Image(systemName: "laptopcomputer")
-                                    Text(mac.name)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                }
-                                .padding().background(.background, in: RoundedRectangle(cornerRadius: 16))
-                            }
-                            .buttonStyle(.plain)
+                if connection.nearby.isEmpty {
+                    Text(connection.bluetoothReady ? String(localized: "Looking for nearby Macs…") : connection.status)
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(connection.nearby) { mac in
+                    Button {
+                        pendingDesktopPair = systemDesktop
+                        connection.connect(mac)
+                    } label: {
+                        HStack {
+                            Label(mac.name, systemImage: "laptopcomputer")
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary)
                         }
-                        if connection.nearby.isEmpty && connection.bluetoothReady { Text("Looking for nearby Macs…").foregroundStyle(.secondary).padding() }
-                        Button { showSetup = true } label: {
-                            HStack {
-                                Label("Set Up Your Mac", systemImage: "shippingbox")
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(.secondary)
-                            }
-                            .padding().background(.background, in: RoundedRectangle(cornerRadius: 16))
-                        }.buttonStyle(.plain)
+                        .padding().background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
                     }
+                    .buttonStyle(.plain)
+                }
+                Button("Set Up Your Mac", systemImage: "shippingbox") { showSetup = true }
+                    .buttonStyle(.bordered)
+                if !connection.bluetoothReady {
+                    Button("Open iPhone Settings") {
+                        UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
+                    }.font(.footnote)
                 }
             }
-            Spacer(minLength: 0)
-            Button("Open iPhone Settings") {
-                UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
-            }.font(.footnote)
         }
     }
 
@@ -331,6 +418,8 @@ struct ContentView: View {
                 HoldControl(title: String(localized: "Hold for Precision"), enabled: controller.canControl) { controller.precise = $0 }
                 Button("Disconnect") { controller.stop(); connection.disconnect() }.buttonStyle(.bordered)
             }.frame(height: 44)
+            Button("Built-in Screen Sharing", systemImage: "desktopcomputer", action: selectSystemDesktop)
+                .font(.subheadline)
         }
     }
 

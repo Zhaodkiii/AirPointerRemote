@@ -1,3 +1,4 @@
+import Combine
 import CoreBluetooth
 import CryptoKit
 import UIKit
@@ -19,6 +20,8 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     @Published var changedMac: NearbyMac?
     @Published var accessibility = false
     @Published var macPaused = false
+    let editableMirrorClick = PassthroughSubject<Double, Never>()
+    private(set) var mirrorHosts = [String]()
     var onDisconnect: (() -> Void)?
 
     private let identity = try? PhoneKeychain.identity()
@@ -150,12 +153,12 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
 
     var connectedMacID: UUID? { connected ? peripheral?.identifier : nil }
 
-    func beginLinkedScreen(inline: Bool, chooseDisplay: Bool) -> LinkedOffer? {
+    func beginLinkedScreen(inline: Bool, chooseDisplay: Bool, adaptive: Bool = false) -> LinkedOffer? {
         guard connected, !macPaused, let sessionKey else { return nil }
         linkedRequested = true
         let first = UInt32.random(in: .min ... .max)
         let second = UInt32.random(in: .min ... .max)
-        send(.init(.linkStart, x: Double(first), y: Double(second), phase: (inline ? 1 : 0) | (chooseDisplay ? 2 : 0) | 4))
+        send(.init(.linkStart, x: Double(first), y: Double(second), phase: (inline ? 1 : 0) | (chooseDisplay ? 2 : 0) | 4 | (adaptive ? 8 : 0)))
         return LinkedOffer(key: sessionKey, first: first, second: second)
     }
 
@@ -221,7 +224,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         guard let sessionKey else { return }
         if !commands.isEmpty {
             var command = commands.removeFirst()
-            command.time -= sessionOrigin
+            if command.action != .mirrorFocus { command.time -= sessionOrigin }
             sent += 1
             guard let data = try? PhoneProtocol.seal(command.data, key: sessionKey, sequence: sent, direction: 2) else { return }
             queueReliable(data)
@@ -273,7 +276,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         serverHello = nil
         assembler = PhoneAssembler()
         pairingCode = nil
-        sent = 0; received = 0
+        mirrorHosts = []; sent = 0; received = 0
         lastWrite = 0
         writing = false
         readingHandshake = false
@@ -415,6 +418,8 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         macPaused = update.paused
         switch update.state {
         case "ready":
+            if let hosts = update.mirrorHosts { mirrorHosts = hosts }
+            if let click = update.editableClick { editableMirrorClick.send(click) }
             if !connected {
                 guard let serverHello else { return }
                 guard PhoneKeychain.save(serverHello.publicKey, account: "mac." + peripheral.identifier.uuidString) else {

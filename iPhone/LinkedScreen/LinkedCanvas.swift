@@ -96,6 +96,8 @@ struct LinkedCanvas: UIViewRepresentable {
         var onPreviewTap: (() -> Void)?
         var zoomRequest: ZoomRequest?
         private var appliedZoomRequest: UUID?
+        private var adaptive: Bool { surface == .direct && client?.adaptiveDesktop == true }
+        private var anchor: CGPoint?
         private var dragging = false
         private var rect: CGRect {
             guard let client else { return .zero }
@@ -122,13 +124,25 @@ struct LinkedCanvas: UIViewRepresentable {
             two.minimumNumberOfTouches = 2; two.maximumNumberOfTouches = 2
             let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:)))
             let gestures = PadMotionRecognizer()
-            gestures.available = { [weak self] in self?.surface == .trackpad }
+            gestures.available = { [weak self] in self?.surface == .trackpad || self?.adaptive == true }
+            gestures.usesDesktopGestures = { [weak self] in self?.adaptive == true }
+            gestures.desktopPinch = { [weak self] factor, point in
+                guard let self, let client else { return }
+                finishTouchScroll(cancelled: true)
+                scale(to: client.viewport.zoom * factor, at: point)
+            }
             gestures.action = { [weak self] gesture in
                 var message = LinkedMessage(.gesture)
                 message.padGesture = gesture
                 self?.client?.control(message)
             }
             gestures.scroll = { [weak self] delta, phase, _ in
+                if let self, adaptive, let client {
+                    finishTouchScroll(cancelled: true)
+                    client.updateViewport { $0.pan(by: delta, in: self.bounds, display: client.size) }
+                    setNeedsLayout()
+                    return
+                }
                 let natural = UserDefaults.standard.object(forKey: "naturalScroll") as? Bool ?? true
                 var message = LinkedMessage(.scroll, x: natural ? delta.x : -delta.x, y: natural ? delta.y : -delta.y)
                 message.scrollPhase = phase
@@ -142,9 +156,9 @@ struct LinkedCanvas: UIViewRepresentable {
 
         override func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
             if gesture is UILongPressGestureRecognizer { return surface == .direct && !drag }
-            if gesture is UIPinchGestureRecognizer { return surface != .trackpad }
+            if gesture is UIPinchGestureRecognizer { return surface != .trackpad && !adaptive }
             if let pan = gesture as? UIPanGestureRecognizer {
-                if pan.minimumNumberOfTouches == 2 { return surface != .trackpad }
+                if pan.minimumNumberOfTouches == 2 { return surface != .trackpad && !adaptive }
                 return surface != .display
             }
             if let tap = gesture as? UITapGestureRecognizer, surface == .display {
@@ -205,7 +219,13 @@ struct LinkedCanvas: UIViewRepresentable {
             guard surface == .direct, g.state == .began, !drag else { return }
             send(.rightClick, at: g.location(in: self))
         }
-        func endDrag() { if dragging { client?.releaseLinkedButton(); dragging = false } }
+        private func finishTouchScroll(cancelled: Bool) {
+            if anchor != nil { sendScroll(.zero, phase: cancelled ? 8 : 4, start: .zero) }
+        }
+        func endDrag() {
+            finishTouchScroll(cancelled: true)
+            if dragging { client?.releaseLinkedButton(); dragging = false }
+        }
         @objc private func pan(_ g: UIPanGestureRecognizer) {
             guard surface != .display else { return }
             let p = g.location(in: self), delta = g.translation(in: self)
@@ -217,24 +237,45 @@ struct LinkedCanvas: UIViewRepresentable {
                     guard surface != .direct || rect.contains(start) else { return }
                     if surface == .direct { send(.dragStart, at: start) } else { client?.control(.init(.currentDown)) }
                     dragging = true
+                } else if adaptive {
+                    sendScroll(.zero, phase: 1, start: CGPoint(x: p.x - delta.x, y: p.y - delta.y))
                 }
                 fallthrough
             case .changed:
                 if surface == .direct {
                     if dragging { send(.dragMove, at: p, clamp: true) }
+                    else if adaptive && !drag {
+                        sendScroll(delta, phase: 2, start: p)
+                    }
                 } else {
                     let velocity = g.velocity(in: self)
                     let gain = 0.65 + min(2.1, hypot(velocity.x, velocity.y)/800)
                     client?.control(.init(.relative, x: delta.x*gain, y: delta.y*gain))
                 }
-            default: endDrag()
+            default:
+                finishTouchScroll(cancelled: g.state != .ended)
+                endDrag()
             }
         }
+        private func sendScroll(_ delta: CGPoint, phase: UInt8, start: CGPoint) {
+            if phase == 1 {
+                guard rect.contains(start), rect.width > 0, rect.height > 0 else { anchor = nil; return }
+                anchor = CGPoint(x: (start.x - rect.minX) / rect.width, y: (start.y - rect.minY) / rect.height)
+            }
+            guard let anchor, let client else { return }
+            let gain = client.size.width / max(1, rect.width)
+            var message = LinkedMessage(.scroll, x: delta.x * gain, y: delta.y * gain)
+            message.scrollAnchor = anchor
+            message.scrollPhase = phase
+            client.control(message)
+            if phase == 4 || phase == 8 { self.anchor = nil }
+        }
+
         @objc private func twoFingers(_ g: UIPanGestureRecognizer) {
             let delta = g.translation(in: self)
             g.setTranslation(.zero, in: self)
             guard surface != .trackpad, let client else { return }
-            client.updateViewport { $0.pan(by: delta, in: bounds, display: client.size) }
+            client.updateViewport { $0.pan(by: delta, in: self.bounds, display: client.size) }
             setNeedsLayout()
         }
 

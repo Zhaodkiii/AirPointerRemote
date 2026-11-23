@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@novnc/novnc": "1.7.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

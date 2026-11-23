@@ -1,4 +1,7 @@
 import AppKit
+#if CLOSED_LID_DESKTOP
+import SwiftUI
+#endif
 import Network
 import OSLog
 import ScreenCaptureKit
@@ -24,7 +27,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     }
     static var hasRememberedDisplays: Bool { !remembered.isEmpty }
     static func forgetAllDisplays() { UserDefaults.standard.removeObject(forKey: preferencesKey) }
-    var canRememberDisplay: Bool { !ended && selectedUUID != nil }
+    var canRememberDisplay: Bool { !ended && !adaptiveRequested && selectedUUID != nil }
     var remembersDisplay: Bool { selectedUUID != nil && Self.remembered[peer] == selectedUUID }
 
     func setRemembered(_ enabled: Bool) {
@@ -112,6 +115,15 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private(set) var ended = false
     var report: ((String) -> Void)?
     private var integratedLid = false
+    private var adaptiveRequested = false
+    #if CLOSED_LID_DESKTOP
+    private var windowPicker: NSPanel?
+    private var phoneWindow: PhoneDesktopWindow?
+    private var adaptiveScreen: VirtualScreen?
+    private var adaptiveSize: AdaptiveDesktopSize?
+    private var adaptivePendingSize: AdaptiveDesktopSize?
+    private var adaptiveResizing = false
+    #endif
     var closedLidPowerWarning: String?
     private var phoneSupportsTransportResume = false
     private var detachedDeadline: TimeInterval?
@@ -124,6 +136,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private enum HandoffDestination {
         case builtIn
         case lidDesktop(CGDirectDisplayID)
+        case adaptive(CGDirectDisplayID)
 
         var closedLid: Bool {
             if case .lidDesktop = self { return true }
@@ -133,7 +146,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         func matches(_ id: CGDirectDisplayID) -> Bool {
             switch self {
             case .builtIn: CGDisplayIsBuiltin(id) != 0
-            case .lidDesktop(let target): id == target
+            case .lidDesktop(let target), .adaptive(let target): id == target
             }
         }
     }
@@ -158,7 +171,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     }
     private var handoff: DisplayHandoff?
     var canSwitchToLidDisplay: Bool {
-        !ended && !integratedLid && channelReady && hasPicture && handoff == nil &&
+        !ended && !integratedLid && !adaptiveRequested && channelReady && hasPicture && handoff == nil &&
             backgroundDeadline == nil && !playbackPaused && displayID != nil
     }
     private var networkTimeout: TimeInterval { canResumeTransport ? 10 : 5 }
@@ -170,9 +183,10 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         stop("Connection to the iPhone was interrupted.", lidReconnect: integratedLid && hasPicture)
     }
 
-    func start(_ offer: LinkedOffer, chooseDisplay: Bool = false, supportsTransportResume: Bool = false) {
+    func start(_ offer: LinkedOffer, chooseDisplay: Bool = false, supportsTransportResume: Bool = false, adaptive: Bool = false) {
         guard !ended else { return }
         sessionOffer = offer
+        adaptiveRequested = adaptive
         phoneSupportsTransportResume = supportsTransportResume
         do {
             let server = try NWListener(using: offer.parameters)
@@ -188,6 +202,8 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
                     if self.detachedDeadline != nil {
                         guard !self.resumeTimedOut else { self.stopResumeTimeout(); return }
                         self.resumeTransport()
+                    } else if self.adaptiveRequested {
+                        self.waitForAdaptiveSize()
                     } else {
                         self.chooseDisplay(forcePicker: chooseDisplay)
                     }
@@ -222,7 +238,11 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         }
         observe(DistributedNotificationCenter.default(), .init("com.apple.screenIsLocked"))
         observe(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification)
-        timer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in self?.tick() }
+        // NSMenu tracks scrolling in eventTracking mode. Heartbeats and frame ACK
+        // deadlines must keep running while the status item is open.
+        let sessionTimer = Timer(timeInterval: 0.35, repeats: true) { [weak self] _ in self?.tick() }
+        timer = sessionTimer
+        RunLoop.main.add(sessionTimer, forMode: .common)
     }
 
     private func clearVideoLane() {
@@ -307,6 +327,9 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         let handle = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             if name == NSApplication.didChangeScreenParametersNotification || name == NSWorkspace.screensDidSleepNotification {
+                #if CLOSED_LID_DESKTOP
+                if adaptiveResizing { return }
+                #endif
                 if lidRecoveryDeadline != nil { return }
                 if stream == nil { return }
                 if lidDisplayUUID != nil && handoff?.awaitingFrame != true {
@@ -339,6 +362,149 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         }
         observers.append((center, handle))
     }
+
+    private func waitForAdaptiveSize() {
+        #if CLOSED_LID_DESKTOP
+        guard CGPreflightScreenCaptureAccess() else {
+            _ = CGRequestScreenCaptureAccess()
+            stop("Allow Screen Recording for AirPointer Remote Direct on the Mac, then reconnect.")
+            return
+        }
+        deadline = Date().addingTimeInterval(18)
+        var waiting = LinkedMessage(.waiting)
+        waiting.adaptiveDesktop = true
+        channel?.send(waiting)
+        #else
+        stop("iPhone Desktop requires AirPointer Remote Direct on the Mac.")
+        #endif
+    }
+
+    #if CLOSED_LID_DESKTOP
+    private func requestAdaptiveSize(_ size: AdaptiveDesktopSize) {
+        guard adaptiveRequested, size.valid else { return }
+        adaptivePendingSize = size
+        applyAdaptiveSize()
+    }
+
+    private func applyAdaptiveSize() {
+        guard !ended, channelReady, !adaptiveResizing, handoff == nil,
+              backgroundDeadline == nil, !playbackPaused,
+              let size = adaptivePendingSize else { return }
+        if size == adaptiveSize { adaptivePendingSize = nil; return }
+        if adaptiveScreen != nil && (!hasPicture || stream == nil) { return }
+        adaptivePendingSize = nil
+        if let screen = adaptiveScreen {
+            adaptiveResizing = true
+            mouse.reset()
+            guard screen.resize(width: UInt32(size.width), height: UInt32(size.height)) else {
+                stop("The Mac could not resize iPhone Desktop.")
+                return
+            }
+            waitForAdaptiveDisplay(screen.displayID, size: size, switching: true)
+        } else {
+            phoneWindow = AXIsProcessTrusted() ? PhoneDesktopWindow.focused() : nil
+            guard let screen = VirtualScreen(adaptiveWidth: UInt32(size.width), height: UInt32(size.height)) else {
+                stop("This Mac could not create iPhone Desktop.")
+                return
+            }
+            adaptiveScreen = screen
+            adaptiveSize = size
+            listener?.cancel()
+            waitForAdaptiveDisplay(screen.displayID, size: size, switching: false)
+        }
+    }
+
+    private func placePhoneWindow(on display: CGDirectDisplayID, size: AdaptiveDesktopSize, remaining: Int = 3) {
+        // AppKit and the target application can observe a new display later than ScreenCaptureKit.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, !ended, adaptiveScreen?.displayID == display, adaptiveSize == size,
+                  !adaptiveResizing else { return }
+            guard let window = phoneWindow else {
+                showWindowPicker(on: display, size: size)
+                return
+            }
+            if window.place(on: display) {
+                windowPicker?.close()
+                windowPicker = nil
+                videoLog.notice("Application window placed on iPhone Desktop")
+                return
+            }
+            if remaining > 1 {
+                placePhoneWindow(on: display, size: size, remaining: remaining - 1)
+            } else {
+                window.restore()
+                phoneWindow = nil
+                showWindowPicker(on: display, size: size, retry: true)
+                videoLog.notice("Window placement unavailable; continuing to share iPhone Desktop")
+            }
+        }
+    }
+
+    private func showWindowPicker(on display: CGDirectDisplayID, size: AdaptiveDesktopSize, retry: Bool = false) {
+        guard let screen = NSScreen.screens.first(where: {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display
+        }) else { return }
+        let panel = windowPicker ?? NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+                                             backing: .buffered, defer: false, screen: screen)
+        panel.isReleasedWhenClosed = false
+        panel.hidesOnDeactivate = false
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        let picker = PhoneWindowPicker(retry: retry) { [weak self] window in
+            guard let self, !ended, adaptiveScreen?.displayID == display, adaptiveSize == size else { return }
+            windowPicker?.orderOut(nil)
+            if let previous = phoneWindow, CFEqual(previous.element, window.element) {
+                windowPicker?.close()
+                windowPicker = nil
+                return
+            }
+            phoneWindow?.restore()
+            phoneWindow = window
+            placePhoneWindow(on: display, size: size)
+        }
+        panel.contentView = NSHostingView(rootView: picker)
+        let area = screen.visibleFrame
+        panel.setFrame(area.insetBy(dx: 16, dy: 24), display: true)
+        panel.orderFrontRegardless()
+        windowPicker = panel
+        videoLog.notice("Window chooser presented on iPhone Desktop")
+    }
+
+    private func waitForAdaptiveDisplay(_ id: CGDirectDisplayID, size: AdaptiveDesktopSize,
+                                        switching: Bool, attempts: Int = 24) {
+        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { [weak self] content, _ in
+            DispatchQueue.main.async {
+                guard let self, !self.ended, self.adaptiveScreen?.displayID == id else { return }
+                if let display = content?.displays.first(where: {
+                    $0.displayID == id && $0.width == size.width && $0.height == size.height
+                }) {
+                    guard CGDisplayIsInMirrorSet(id) == 0 else {
+                        self.stop("Set iPhone Desktop to an extended display on the Mac.")
+                        return
+                    }
+                    if switching {
+                        self.switchDisplay(to: .adaptive(id)) { [weak self] ok in
+                            guard let self, !ended else { return }
+                            adaptiveResizing = false
+                            guard ok else { stop("Could not resume sharing the resized iPhone Desktop."); return }
+                            adaptiveSize = size
+                            placePhoneWindow(on: id, size: size)
+                        }
+                    } else {
+                        self.capture(SCContentFilter(display: display, excludingWindows: []), knownID: id)
+                        self.placePhoneWindow(on: id, size: size)
+                    }
+                } else if attempts > 1 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                        self?.waitForAdaptiveDisplay(id, size: size, switching: switching, attempts: attempts - 1)
+                    }
+                } else {
+                    self.stop("The Mac did not publish the requested iPhone Desktop size.")
+                }
+            }
+        }
+    }
+    #endif
 
     private func chooseDisplay(forcePicker: Bool) {
         deadline = Date().addingTimeInterval(90)
@@ -714,7 +880,8 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private func captureConfiguration(for filter: SCContentFilter) -> SCStreamConfiguration? {
         let size = filter.contentRect.size
         guard size.width > 0, size.height > 0 else { return nil }
-        let scale = min(1, 1280 / max(size.width, size.height))
+        let limit: CGFloat = adaptiveRequested ? 1920 : 1280
+        let scale = min(1, limit / max(size.width, size.height))
         let config = SCStreamConfiguration()
         config.width = max(2, Int(size.width * scale) / 2 * 2)
         config.height = max(2, Int(size.height * scale) / 2 * 2)
@@ -858,6 +1025,8 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
 
     private func makeReady(size: CGSize, title: String, closedLid: Bool, requiresOpenLid: Bool) -> LinkedMessage {
         var ready = LinkedMessage(.ready, x: size.width, y: size.height, text: title)
+        ready.supportsDesktopTools = adaptiveRequested ? true : nil
+        ready.adaptiveDesktop = adaptiveRequested ? true : nil
         ready.closedLidDesktop = closedLid ? true : nil
         ready.requiresOpenLid = requiresOpenLid ? true : nil
         ready.transportResume = canResumeTransport ? true : nil
@@ -927,6 +1096,10 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             guard let self, let stream else { return }
             if self.handoff?.target?.stream === stream { self.failDisplayHandoff(); return }
             guard self.stream === stream else { return }
+            #if CLOSED_LID_DESKTOP
+            // WindowServer can retire the old capture stream while switching modes.
+            if self.adaptiveResizing && self.handoff?.awaitingFrame != true { return }
+            #endif
             let failure = error as NSError
             if self.lidDisplayUUID != nil,
                failure.domain == SCStreamErrorDomain, [-3821, -3815, -3814, -3811].contains(failure.code) {
@@ -1098,6 +1271,9 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             hasPicture = true
             everAcknowledgedPicture = true
             awaitingForegroundFrame = false
+            #if CLOSED_LID_DESKTOP
+            if adaptivePendingSize != nil { applyAdaptiveSize() }
+            #endif
         }
         if let oldest = frames.first {
             let age = now - oldest.started
@@ -1180,7 +1356,10 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
                 videoLog.notice("Waiting for video acknowledgement; screen-positioned actions paused")
             }
         }
-        let canControl = displayID != nil && access && acceptsLinkedInput && !viewingOnly
+        var canControl = displayID != nil && access && acceptsLinkedInput && !viewingOnly
+        #if CLOSED_LID_DESKTOP
+        if adaptiveResizing { canControl = false }
+        #endif
         var heartbeat = LinkedMessage(.alive, x: hasPicture && canControl && !awaitingForegroundFrame && !pictureDelayed ? 1 : 0)
         heartbeat.videoDelayed = canControl && pictureDelayed
         heartbeat.videoBitrate = videoBitRate
@@ -1210,12 +1389,13 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         pendingKeyboardClick = id
         guard let id else { return }
         // The remote app updates focus after consuming the posted mouse event.
-        for delay in [0.07, 0.20, 0.38] {
+        for delay in [0.07, 0.20, 0.38, 0.65] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self, !self.ended, self.backgroundDeadline == nil,
                       self.pendingKeyboardClick == id, let displayID = self.displayID,
                       CGDisplayIsActive(displayID) != 0, CGDisplayBounds(displayID) == self.bounds,
                       self.bounds.contains(point), CGPreflightPostEventAccess() else { return }
+                self.focus.prepareForClick()
                 self.focus.refresh()
                 guard self.focus.matchesClick(at: point) else { return }
                 self.pendingKeyboardClick = nil
@@ -1235,6 +1415,18 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             }
         }
         if message.kind == .alive {
+            #if CLOSED_LID_DESKTOP
+            if let size = message.adaptiveSize { requestAdaptiveSize(size) }
+            #endif
+            if let query = message.focusQuery, !viewingOnly, acceptsLinkedInput, backgroundDeadline == nil, hasPicture {
+                focus.prepareForClick()
+                focus.refresh()
+                var reply = LinkedMessage(.focus, token: focus.token)
+                reply.composerVersion = 1
+                reply.focusQuery = query
+                reply.sandboxedReceiver = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+                channel?.send(reply)
+            }
             if message.supportsVideoLane == true { supportsSplit = true }
             lastHeartbeat = Date()
             return
@@ -1266,6 +1458,9 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             }
             return
         }
+        #if CLOSED_LID_DESKTOP
+        if adaptiveResizing { return }
+        #endif
         guard stream != nil, lidRecoveryDeadline == nil, handoff?.awaitingFrame != true,
               acceptsLinkedInput, !viewingOnly else { return }
         protectDelayedInput()
@@ -1285,6 +1480,21 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         let x = min(1, max(0, message.x)), y = min(1, max(0, message.y))
         let point = CGPoint(x: bounds.minX + x * (bounds.width - 1), y: bounds.minY + y * (bounds.height - 1))
         switch message.kind {
+        case .desktopTool:
+            #if CLOSED_LID_DESKTOP
+            guard adaptiveRequested, adaptiveScreen?.displayID == displayID,
+                  let size = adaptiveSize, let tool = message.desktopTool else { return }
+            if tool == .windows {
+                if let windowPicker, windowPicker.isVisible, phoneWindow != nil {
+                    windowPicker.close()
+                    self.windowPicker = nil
+                } else {
+                    showWindowPicker(on: displayID, size: size)
+                }
+            } else if windowPicker?.isVisible != true {
+                PhoneDesktopWindow.send(tool, on: displayID)
+            }
+            #endif
         case .click, .doubleClick, .rightClick, .dragStart, .dragMove:
             mouse.position(at: point)
             switch message.kind {
@@ -1315,7 +1525,17 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             if let press = leftPress, hypot(mouse.location.x - press.point.x, mouse.location.y - press.point.y) >= 5 {
                 leftPress = nil
             }
-        case .currentClick, .currentDown, .currentDouble, .currentRight, .scroll:
+        case .scroll:
+            if let anchor = message.scrollAnchor {
+                guard (0...1).contains(anchor.x), (0...1).contains(anchor.y) else { return }
+                let target = CGPoint(x: bounds.minX + anchor.x * (bounds.width - 1),
+                                     y: bounds.minY + anchor.y * (bounds.height - 1))
+                if message.scrollPhase == 1 { mouse.position(at: target) }
+                mouse.scroll(x: message.x, y: message.y, phase: message.scrollPhase ?? 0, at: target)
+            } else if bounds.contains(mouse.location) {
+                mouse.scroll(x: message.x, y: message.y, phase: message.scrollPhase ?? 0)
+            }
+        case .currentClick, .currentDown, .currentDouble, .currentRight:
             guard bounds.contains(mouse.location) else { return }
             switch message.kind {
             case .currentClick:
@@ -1334,7 +1554,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             case .currentRight:
                 pendingKeyboardClick = nil
                 mouse.handle(.init(.rightClick))
-            default: mouse.handle(.init(.scroll, x: message.x, y: message.y, phase: message.scrollPhase ?? 0))
+            default: break
             }
         case .insert:
             guard let request = message.request, let text = message.text else { return }
@@ -1390,8 +1610,196 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         stream = nil; pending = nil; latestSample = nil; encoder = nil; channel = nil
         report?(Bundle.main.localizedString(forKey: reason, value: reason, table: nil))
         #if CLOSED_LID_DESKTOP
+        windowPicker?.close()
+        windowPicker = nil
+        phoneWindow?.restore()
+        phoneWindow = nil
+        adaptiveScreen = nil
         ClosedLidDesktop.shared.sharingEnded(self, mayReconnect: lidReconnect)
         #endif
         onEnd?()
     }
 }
+
+#if CLOSED_LID_DESKTOP
+/// AX uses the same top-left global coordinate space as CGDisplayBounds.
+private final class PhoneDesktopWindow {
+    let element: AXUIElement
+    let original: CGRect
+    private var moved = false
+
+    private init(_ element: AXUIElement, original: CGRect) {
+        self.element = element
+        self.original = original
+    }
+
+    static func focused() -> PhoneDesktopWindow? {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              app.processIdentifier != getpid() else { return nil }
+        let owner = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(owner, 0.5)
+        var raw: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(owner, kAXFocusedWindowAttribute as CFString, &raw) == .success,
+              let raw, CFGetTypeID(raw) == AXUIElementGetTypeID() else { return nil }
+        let window = raw as! AXUIElement
+        guard let original = frame(window) else { return nil }
+        return PhoneDesktopWindow(window, original: original)
+    }
+
+    static func send(_ tool: LinkedMessage.DesktopTool, on display: CGDirectDisplayID) {
+        guard let focused = focused(), CGDisplayBounds(display).contains(CGPoint(
+            x: focused.original.midX, y: focused.original.midY)) else { return }
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(focused.element, &pid) == .success else { return }
+        let code: CGKeyCode
+        var flags: CGEventFlags = []
+        switch tool {
+        case .escape: code = 53
+        case .left: code = 123
+        case .right: code = 124
+        case .down: code = 125
+        case .up: code = 126
+        case .copy: code = 8; flags = .maskCommand
+        case .selectAll: code = 0; flags = .maskCommand
+        case .windows: return
+        }
+        for pressed in [true, false] {
+            let event = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: pressed)
+            event?.flags = flags
+            event?.postToPid(pid)
+        }
+    }
+
+    struct Choice: Identifiable {
+        let id = UUID()
+        let app: String
+        let title: String
+        let window: PhoneDesktopWindow
+    }
+
+    static func choices() -> [Choice] {
+        NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && !$0.isHidden && $0.processIdentifier != getpid()
+        }.flatMap { app -> [Choice] in
+            let owner = AXUIElementCreateApplication(app.processIdentifier)
+            AXUIElementSetMessagingTimeout(owner, 0.2)
+            var raw: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(owner, kAXWindowsAttribute as CFString, &raw) == .success,
+                  let windows = raw as? [AXUIElement] else { return [] }
+            return windows.compactMap { window in
+                guard let rect = frame(window), rect.width > 0, rect.height > 0 else { return nil }
+                var title: CFTypeRef?
+                AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title)
+                var minimized: CFTypeRef?
+                AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized)
+                guard (minimized as? Bool) != true else { return nil }
+                return Choice(app: app.localizedName ?? "", title: title as? String ?? "",
+                              window: PhoneDesktopWindow(window, original: rect))
+            }
+        }.sorted { $0.app.localizedStandardCompare($1.app) == .orderedAscending }
+    }
+
+    private static func frame(_ window: AXUIElement) -> CGRect? {
+        var origin = CGPoint.zero
+        var size = CGSize.zero
+        func read(_ key: String, _ type: AXValueType, _ pointer: UnsafeMutableRawPointer) -> Bool {
+            var raw: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(window, key as CFString, &raw) == .success,
+                  let raw, CFGetTypeID(raw) == AXValueGetTypeID() else { return false }
+            return AXValueGetValue(raw as! AXValue, type, pointer)
+        }
+        guard read(kAXPositionAttribute, .cgPoint, &origin),
+              read(kAXSizeAttribute, .cgSize, &size) else { return nil }
+        return CGRect(origin: origin, size: size)
+    }
+
+    private func setFrame(_ rect: CGRect) {
+        var origin = rect.origin
+        var size = rect.size
+        guard let position = AXValueCreate(.cgPoint, &origin),
+              let dimensions = AXValueCreate(.cgSize, &size) else { return }
+        AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, position)
+        AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, dimensions)
+        AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, position)
+    }
+
+    func place(on display: CGDirectDisplayID) -> Bool {
+        guard let screen = NSScreen.screens.first(where: {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display
+        }) else { return false }
+        let bounds = CGDisplayBounds(display)
+        let visible = screen.visibleFrame
+        let target = CGRect(x: bounds.minX + visible.minX - screen.frame.minX,
+                            y: bounds.minY + screen.frame.maxY - visible.maxY,
+                            width: visible.width, height: visible.height)
+        moved = true
+        setFrame(target)
+        guard var actual = Self.frame(element) else { return false }
+        // Anchor minimum-size windows against the shared edge so any excess
+        // extends into empty space, rather than onto an adjacent monitor.
+        if actual.width > target.width + 1 || actual.height > target.height + 1 {
+            let otherBounds = NSScreen.screens.compactMap { other -> CGRect? in
+                guard let number = other.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+                      number.uint32Value != display else { return nil }
+                return CGDisplayBounds(number.uint32Value)
+            }
+            let originsX = [target.minX, target.maxX - actual.width]
+            let originsY = [target.minY, target.maxY - actual.height]
+            for x in originsX {
+                for y in originsY {
+                    let candidate = CGRect(origin: CGPoint(x: x, y: y), size: actual.size)
+                    if otherBounds.allSatisfy({ $0.intersection(candidate).isEmpty }) {
+                        setFrame(candidate)
+                        if let updated = Self.frame(element) { actual = updated }
+                        break
+                    }
+                }
+                if otherBounds.allSatisfy({ $0.intersection(actual).isEmpty }) { break }
+            }
+        }
+        let visiblePart = bounds.intersection(actual)
+        guard !visiblePart.isNull, visiblePart.width >= min(target.width, actual.width) - 2,
+              visiblePart.height >= min(target.height, actual.height) - 2 else { return false }
+        // A minimum-width window may extend past the outside edge of the desktop.
+        // Accept it only if the overflow is invisible on the Mac's other displays.
+        return !NSScreen.screens.contains { other in
+            guard let number = other.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+                  number.uint32Value != display else { return false }
+            return !CGDisplayBounds(number.uint32Value).intersection(actual).isEmpty
+        }
+    }
+
+    func restore() {
+        if moved { setFrame(original) }
+    }
+}
+
+private struct PhoneWindowPicker: View {
+    let retry: Bool
+    let select: (PhoneDesktopWindow) -> Void
+    @State private var choices: [PhoneDesktopWindow.Choice] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("选择要在 iPhone 上显示的窗口").font(.largeTitle.bold())
+            if retry { Text("当前窗口未能移入。可以重试，或选择另一个普通窗口。").foregroundStyle(.secondary) }
+            if choices.isEmpty {
+                Text("请在 Mac 上打开一个普通窗口，并允许接收端使用辅助功能，然后刷新。")
+            }
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(choices) { choice in
+                        Button { select(choice.window) } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(choice.app).font(.title2.bold())
+                                if !choice.title.isEmpty { Text(choice.title).lineLimit(2) }
+                            }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                        }.buttonStyle(.bordered)
+                    }
+                }
+            }
+            Button("刷新窗口列表") { choices = PhoneDesktopWindow.choices() }
+        }.padding(28).onAppear { choices = PhoneDesktopWindow.choices() }
+    }
+}
+#endif

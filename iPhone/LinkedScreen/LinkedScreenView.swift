@@ -5,12 +5,48 @@ struct LinkedScreenView: View {
     @ObservedObject var client: LinkedClient
     let startPiP: () -> Void
     @Binding var automaticPiP: Bool
+    @State private var attemptedAdaptiveStart = false
+    var preferAdaptive = false
     @Environment(\.dismiss) private var dismiss
     var body: some View {
+        GeometryReader { geometry in
+            let viewport = AdaptiveDesktopSize(viewport: CGSize(
+                width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
+                height: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom
+            ))
+            screen(viewport: viewport)
+                .onChange(of: viewport, initial: true) { _, value in
+                    if preferAdaptive, !attemptedAdaptiveStart, connection.connected, !connection.macPaused, !client.running, let value {
+                        attemptedAdaptiveStart = true
+                        client.start(connection, adaptive: value)
+                    }
+                    if !client.editing { client.adaptiveViewportChanged(value) }
+                }
+                .onChange(of: client.editing) { _, editing in
+                    if !editing { client.adaptiveViewportChanged(viewport) }
+                }
+        }
+        .ignoresSafeArea(.keyboard, edges: client.adaptiveDesktop && client.editing ? [] : .bottom)
+        .statusBarHidden(client.adaptiveDesktop && client.live)
+    }
+
+    private func screen(viewport: AdaptiveDesktopSize?) -> some View {
         NavigationStack {
             VStack(spacing: 8) {
                 if client.live {
                     LinkedWorkspace(client: client, inline: false, startPiP: startPiP, automaticPiP: $automaticPiP)
+                        .overlay(alignment: .topTrailing) {
+                            if client.adaptiveDesktop {
+                                Button {
+                                    client.end()
+                                    dismiss()
+                                } label: {
+                                    Image(systemName: "xmark").frame(width: 44, height: 44)
+                                        .background(.regularMaterial, in: Circle())
+                                }
+                                .buttonStyle(.plain).padding(10).accessibilityLabel("Disconnect")
+                            }
+                        }
                 } else {
                     Spacer()
                     Image(systemName: "display").font(.system(size: 48, weight: .light))
@@ -31,16 +67,25 @@ struct LinkedScreenView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center).padding(.horizontal)
                         }
-                        Button(client.canRetrySharing ? String(localized: "Resume Sharing") : String(localized: "Start Sharing")) { client.start(connection) }
-                            .buttonStyle(.borderedProminent).disabled(connection.macPaused)
-                        Button("Choose a Display on the Mac") { client.start(connection, chooseDisplay: true) }
-                            .font(.subheadline).disabled(connection.macPaused)
+                        Button("Start iPhone Desktop", systemImage: "iphone") {
+                            if let viewport { client.start(connection, adaptive: viewport) }
+                        }
+                        .buttonStyle(.borderedProminent).disabled(connection.macPaused || viewport == nil)
+                        Text("Requires AirPointer Remote Direct on the Mac.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if !preferAdaptive {
+                            Button(client.canRetrySharing ? String(localized: "Resume Sharing") : String(localized: "Start Sharing")) { client.start(connection) }
+                                .buttonStyle(.bordered).disabled(connection.macPaused)
+                            Button("Choose a Display on the Mac") { client.start(connection, chooseDisplay: true) }
+                                .font(.subheadline).disabled(connection.macPaused)
+                        }
                         if connection.macPaused { Text("Resume pointer control to share.").font(.caption) }
                     } else { Button("Back to Pairing") { dismiss() } }
                     Spacer()
                 }
             }
-            .navigationTitle(client.live ? client.status : String(localized: "Linked Screen"))
+            .navigationTitle(client.live ? client.status : preferAdaptive ? String(localized: "iPhone Desktop") : String(localized: "Linked Screen"))
+            .toolbar(client.adaptiveDesktop && client.live ? .hidden : .visible, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { client.end(); dismiss() } }
@@ -70,6 +115,15 @@ struct LinkedWorkspace: View {
     private var landscapeFraction: Double { client.previewFraction }
     @State private var initialFraction: Double?
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var toolsExpanded = false
+    @AppStorage("linked.toolsDockRight") private var toolsDockRight = true
+    @AppStorage("linked.toolsDockHeight") private var toolsDockHeight = 0.52
+    @AppStorage("linked.toolButtonSize") private var preferredButtonSize = 44.0
+    @State private var paletteSize = CGSize(width: 52, height: 52)
+    @GestureState private var paletteOffset = CGSize.zero
+    @State private var keysExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showPhonePad = false
     @State private var drag = false
     @State private var zoomRequest: LinkedCanvas.ZoomRequest?
     @State private var hideFullScreenTools = false
@@ -78,10 +132,11 @@ struct LinkedWorkspace: View {
     @State private var showDiagnostics = false
     @State private var confirmDelete = false
     @State private var confirmPaste = false
-    @State private var showFieldRequired = false
 
     var body: some View {
-        workspace.safeAreaInset(edge: .bottom, spacing: 0) {
+        Group {
+            if client.adaptiveDesktop { adaptiveWorkspace } else { workspace }
+        }.safeAreaInset(edge: .bottom, spacing: 0) {
             if client.editing { editor.padding(.vertical, 4) }
         }
         .toolbar {
@@ -96,7 +151,10 @@ struct LinkedWorkspace: View {
                 confirmPaste = false
             }
         }
-        .onChange(of: client.editing) { _, _ in releaseLeft() }
+        .onChange(of: client.editing) { _, editing in
+            releaseLeft()
+            if editing { toolsExpanded = false; keysExpanded = false }
+        }
         .onChange(of: direct) { _, _ in
             releaseLeft()
             drag = false
@@ -118,10 +176,12 @@ struct LinkedWorkspace: View {
             showPreviewHint = false
         }
         .onChange(of: client.canPoint) { _, enabled in if !enabled { releaseLeft() } }
-        .alert("Select an editable Mac field", isPresented: $showFieldRequired) {
+        .alert("Select an editable Mac field", isPresented: $client.fieldRequired) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Click a text field on the shared Mac to use the keyboard.")
+            if client.sandboxedFieldUnavailable {
+                Text("For keyboard support in other Mac apps, use the notarized Mac receiver included with AirPointer.")
+            } else { Text("Click a text field on the shared Mac to use the keyboard.") }
         }
         .sheet(isPresented: $showDiagnostics) {
             NavigationStack {
@@ -192,6 +252,156 @@ struct LinkedWorkspace: View {
             }
             Button("Stop Sharing", role: .destructive) { client.end() }
         } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Sharing options")
+    }
+
+    private var adaptiveWorkspace: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            LinkedCanvas(client: client, surface: .direct, drag: drag, zoomRequest: zoomRequest)
+                .ignoresSafeArea(.container)
+                .overlay {
+                    if client.resuming {
+                        Label("Adjusting Desktop Size…", systemImage: "rectangle.expand.vertical")
+                            .padding(10).background(.regularMaterial, in: Capsule())
+                            .allowsHitTesting(false)
+                    }
+                }
+        }
+        .overlay(alignment: .bottom) {
+            if showPhonePad && !client.editing {
+                VStack(spacing: 4) {
+                    HStack {
+                        Text("触控板").font(.caption)
+                        Spacer()
+                        Button("收起") { showPhonePad = false }
+                    }
+                    LinkedCanvas(client: client, surface: .trackpad, drag: false)
+                        .frame(height: 132)
+                }
+                .padding(12).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+                .padding(.horizontal, 10)
+            }
+        }
+        .overlay {
+            GeometryReader { proxy in
+                let area = proxy.size
+                let travelX = max(0, area.width - paletteSize.width - 12)
+                let travelY = max(0, area.height - paletteSize.height - 12)
+                let left = (toolsDockRight ? travelX : 0) + paletteOffset.width
+                let top = travelY * toolsDockHeight + paletteOffset.height
+                let buttonSize = min(preferredButtonSize, max(44, (area.width - 20) / 6))
+                adaptiveTools(buttonSize: buttonSize, travel: CGSize(width: travelX, height: travelY))
+                    .fixedSize()
+                    .onGeometryChange(for: CGSize.self) { $0.size } action: { paletteSize = $0 }
+                    .offset(x: 6 + min(travelX, max(0, left)), y: 6 + min(travelY, max(0, top)))
+            }
+
+        }
+    }
+
+    private func togglePalette() {
+        toolsExpanded.toggle()
+        keysExpanded = false
+    }
+
+    private func handleGesture(travel: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 5, coordinateSpace: .global)
+            .updating($paletteOffset) { value, offset, _ in offset = value.translation }
+            .onEnded { value in
+                let x = (toolsDockRight ? travel.width : 0) + value.translation.width
+                let y = toolsDockHeight * travel.height + value.translation.height
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                    if travel.width > 0 { toolsDockRight = x >= travel.width / 2 }
+                    if travel.height > 0 { toolsDockHeight = min(1, max(0, y / travel.height)) }
+                }
+            }
+            .exclusively(before: TapGesture().onEnded { togglePalette() })
+    }
+
+    private func adaptiveTools(buttonSize: CGFloat, travel: CGSize) -> some View {
+        VStack(spacing: 5) {
+            if toolsExpanded {
+                Button(showPhonePad ? "收起触控板" : "打开触控板") {
+                    showPhonePad.toggle()
+                    if showPhonePad { toolsExpanded = false }
+                }.padding(8).background(.regularMaterial, in: Capsule())
+            }
+            if toolsExpanded && keysExpanded && client.supportsDesktopTools {
+                HStack(spacing: 0) {
+                    toolKey(.left, "←")
+                    toolKey(.up, "↑")
+                    toolKey(.down, "↓")
+                    toolKey(.right, "→")
+                    toolKey(.escape, "Esc")
+                }
+                .padding(4).background(.regularMaterial, in: Capsule())
+                HStack(spacing: 8) {
+                    Button("Mac 全选 ⌘A") { client.desktopTool(.selectAll) }
+                    Button("Mac 复制 ⌘C") { client.desktopTool(.copy) }
+                }.font(.subheadline).padding(10).background(.regularMaterial, in: Capsule())
+                .disabled(!client.canPoint)
+            }
+            HStack(spacing: 0) {
+                Image(systemName: toolsExpanded ? "circle.grid.2x3.fill" : "ellipsis")
+                    .frame(width: buttonSize, height: buttonSize)
+                    .contentShape(Rectangle())
+                    .gesture(handleGesture(travel: travel))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(toolsExpanded ? "收起工具栏" : "展开工具栏")
+                    .accessibilityHint("拖动可移动工具栏")
+                    .accessibilityAction { togglePalette() }
+                if toolsExpanded {
+                    if client.supportsDesktopTools {
+                        Button {
+                            client.hideKeyboard()
+                            keysExpanded = false
+                            client.desktopTool(.windows)
+                        } label: {
+                            Image(systemName: "macwindow.on.rectangle").frame(width: buttonSize, height: buttonSize)
+                        }.disabled(!client.canPoint).accessibilityLabel("选择 Mac 窗口")
+                    }
+                    Button {
+                        if client.editing { client.hideKeyboard() } else { client.requestKeyboard() }
+                    } label: {
+                        Image(systemName: "keyboard").frame(width: buttonSize, height: buttonSize)
+                            .foregroundStyle(client.editing ? Color.accentColor : .primary)
+                    }.accessibilityLabel(client.editing ? "Hide Keyboard" : "Keyboard")
+                    if client.supportsDesktopTools {
+                        Button { keysExpanded.toggle() } label: {
+                            Image(systemName: "command").frame(width: buttonSize, height: buttonSize)
+                                .foregroundStyle(keysExpanded ? Color.accentColor : .primary)
+                        }.accessibilityLabel("Mac 快捷键")
+                    }
+                    Button { drag.toggle() } label: {
+                        Image(systemName: drag ? "hand.point.up.left.fill" : "hand.point.up.left")
+                            .frame(width: buttonSize, height: buttonSize)
+                    }.accessibilityLabel("Drag")
+                    Menu {
+                        Button("放大桌面") { zoomRequest = .init(factor: 1.5) }
+                        Button("缩小桌面") { zoomRequest = .init(factor: 1 / 1.5) }.disabled(!client.previewZoomed)
+                        Button("恢复全景", action: fitPreview).disabled(!client.previewZoomed)
+                        Picker("工具栏大小", selection: $preferredButtonSize) {
+                            Text("标准").tag(44.0)
+                            Text("大").tag(50.0)
+                            Text("特大").tag(56.0)
+                        }
+                        Text("单指滑动滚动内容，双指捏合缩放。放大后双指平移。")
+                    } label: {
+                        Image(systemName: "magnifyingglass").frame(width: buttonSize, height: buttonSize)
+                    }.accessibilityLabel("桌面缩放")
+                }
+            }
+            .padding(4).background(.regularMaterial, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: toolsExpanded)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: keysExpanded)
+    }
+
+    private func toolKey(_ key: LinkedMessage.DesktopTool, _ label: String) -> some View {
+        Button { client.desktopTool(key) } label: {
+            Text(label).frame(width: 44, height: 44)
+        }.disabled(!client.canPoint)
     }
 
     private var workspace: some View {
@@ -293,8 +503,7 @@ struct LinkedWorkspace: View {
                                 .disabled(!client.pipPossible || client.pipState != .idle)
                             }
                             Button {
-                                if client.focus != nil { client.openKeyboard() }
-                                else { showFieldRequired = true }
+                                client.requestKeyboard()
                             } label: {
                                 Image(systemName: "keyboard").frame(width: 44, height: 44)
                             }.accessibilityLabel("Keyboard")

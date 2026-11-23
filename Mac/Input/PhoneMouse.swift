@@ -68,11 +68,7 @@ final class PhoneMouse {
             }
             lastClickTime = 0
         case .scroll:
-            guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
-                wheel1: Int32(max(-10000, min(10000, command.y))),
-                wheel2: Int32(max(-10000, min(10000, command.x))), wheel3: 0) else { return }
-            event.setIntegerValueField(.scrollWheelEventScrollPhase, value: Int64(command.phase))
-            emit(event)
+            scroll(x: command.x, y: command.y, phase: command.phase)
         case .padGesture:
             if let gesture = PhoneProtocol.PadGesture(rawValue: command.phase) { perform(gesture) }
         case .center:
@@ -83,6 +79,15 @@ final class PhoneMouse {
         case .stop, .pause, .disconnect: reset()
         default: break
         }
+    }
+
+    func scroll(x: Double, y: Double, phase: UInt8, at point: CGPoint? = nil) {
+        guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
+            wheel1: Int32(max(-10000, min(10000, y))),
+            wheel2: Int32(max(-10000, min(10000, x))), wheel3: 0) else { return }
+        event.setIntegerValueField(.scrollWheelEventScrollPhase, value: Int64(phase))
+        if let point { event.location = point }
+        emit(event)
     }
 
     func perform(_ gesture: PhoneProtocol.PadGesture) {

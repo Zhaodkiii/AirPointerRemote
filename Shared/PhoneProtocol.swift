@@ -20,6 +20,8 @@ enum PhoneProtocol {
         let name: String
         let accessibility: Bool
         let paused: Bool
+        var mirrorHosts: [String]?
+        var editableClick: Double?
     }
 
     // Heartbeat phases understood by receivers advertising background resume.
@@ -31,7 +33,7 @@ enum PhoneProtocol {
     enum Action: UInt8 {
         case heartbeat, move, leftDown, leftUp, rightClick, doubleClick
         case scroll, stop, center, pause, resume, confirm, disconnect, linkStart, linkEnd, padGesture
-        case resetPointer, linkedInput
+        case resetPointer, linkedInput, mirrorFocus
     }
 
     enum PadGesture: UInt8, Codable {

@@ -78,6 +78,9 @@ struct PhoneProtocolChecks {
         mouse.handle(.init(.scroll, x: 12, y: -25, phase: 2))
         precondition(events.last?.type == .scrollWheel)
         precondition(events.last?.getIntegerValueField(.scrollWheelEventScrollPhase) == 2)
+        let listPoint = CGPoint(x: -240, y: 120)
+        mouse.scroll(x: 0, y: -18, phase: 2, at: listPoint)
+        precondition(events.last?.location == listPoint)
         for point in [CGPoint(x: -1e8, y: -1e8), CGPoint(x: 1e8, y: 1e8)] {
             let clamped = Displays.clamp(point)
             precondition(Displays.bounds(containing: clamped).contains(clamped))

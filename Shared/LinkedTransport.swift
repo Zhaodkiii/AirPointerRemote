@@ -39,11 +39,33 @@ struct LinkedOffer {
     }
 }
 
+struct AdaptiveDesktopSize: Codable, Equatable {
+    let width: Int
+    let height: Int
+
+    init?(viewport: CGSize) {
+        let longest = max(viewport.width, viewport.height)
+        guard viewport.width.isFinite, viewport.height.isFinite,
+              viewport.width >= 1, viewport.height >= 1 else { return nil }
+        // About two desktop pixels per iPhone point, within the encoder budget.
+        let scale = min(2, 1920 / longest)
+        width = Int((viewport.width * scale / 2).rounded()) * 2
+        height = Int((viewport.height * scale / 2).rounded()) * 2
+        guard valid else { return nil }
+    }
+
+    var valid: Bool {
+        (320...1920).contains(width) && (320...1920).contains(height) &&
+            width.isMultiple(of: 2) && height.isMultiple(of: 2) &&
+            max(width, height) <= 3 * min(width, height)
+    }
+}
+
 struct LinkedMessage: Codable {
     enum Kind: String, Codable {
         case viewing, alive, waiting, ready, focus, insert, inserted, rejected, stop, frameAck, keepAwake
         case click, doubleClick, rightClick, dragStart, dragMove, dragEnd, relative, scroll
-        case currentClick, currentRight, currentDouble, currentDown, gesture
+        case currentClick, currentRight, currentDouble, currentDown, gesture, desktopTool
     }
     struct StyleRun: Codable {
         var start: Int
@@ -51,11 +73,21 @@ struct LinkedMessage: Codable {
         // Bits 0–2 represent bold, italic and underline.
         var style: Int
     }
+    enum DesktopTool: String, Codable {
+        case windows, escape, left, right, up, down, copy, selectAll
+    }
+    var desktopTool: DesktopTool?
+    var supportsDesktopTools: Bool?
+    var adaptiveDesktop: Bool?
+    var adaptiveSize: AdaptiveDesktopSize?
     var styles: [StyleRun]?
     var selection: UUID?
     var readSelection: Bool?
     var composerVersion: Int?
     var keyboardClick: UUID?
+    var focusQuery: UUID?
+    var sandboxedReceiver: Bool?
+    var scrollAnchor: CGPoint?
     var scrollPhase: UInt8?
     var supportsGestures: Bool?
     var padGesture: PhoneProtocol.PadGesture?

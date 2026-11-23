@@ -21,12 +21,15 @@ final class PhoneReceiver {
         var lastSeen = ProcessInfo.processInfo.systemUptime
         var backgroundDeadline: TimeInterval?
         var backgroundViewing = false
+        var advertisedMirrorHosts = false
+        var latestMirrorClick: Double?
         var lastStatus = 0.0
         init(_ central: CBCentral) { self.central = central }
     }
 
     private let identity = try? PhoneKeychain.identity()
     private let mouse = PhoneMouse()
+    private let mirrorFocus = LinkedFocus()
     private var linked: LinkedHost?
     private var allowPendingPointer = false
     private func endSharing(connectionLost: Bool = false) {
@@ -194,6 +197,27 @@ final class PhoneReceiver {
         }
         if session.backgroundViewing, ![.stop, .pause, .heartbeat].contains(command.action) { return }
         if session.backgroundDeadline != nil, ![.stop, .pause, .heartbeat].contains(command.action) { return }
+        if command.action == .mirrorFocus {
+            guard !paused, cachedAccess, (0...1).contains(command.x), (0...1).contains(command.y) else { return }
+            session.latestMirrorClick = command.time
+            // Screen sharing and the paired control channel deliver independently.
+            for delay in [0.12, 0.38] {
+                queue.asyncAfter(deadline: .now() + delay) { [weak self, weak session] in
+                    guard let self, let session, self.sessions[central.identifier] === session,
+                          session.authorized, !self.paused, session.latestMirrorClick == command.time else { return }
+                    DispatchQueue.main.async {
+                        guard self.mirrorFocus.mirrorClickIsEditable(x: command.x, y: command.y) else { return }
+                        queue.async {
+                            guard self.sessions[central.identifier] === session, session.authorized,
+                                  !self.paused, session.latestMirrorClick == command.time else { return }
+                            session.latestMirrorClick = nil
+                            self.status(session, editableClick: command.time)
+                        }
+                    }
+                }
+            }
+            return
+        }
         if command.action == .linkStart {
             guard !paused, let first = UInt32(exactly: command.x), let second = UInt32(exactly: command.y) else { return }
             endSharing()
@@ -212,7 +236,8 @@ final class PhoneReceiver {
                 }
                 host.acceptsLinkedInput = acceptsLinkedInput
                 host.report = state
-                host.start(offer, chooseDisplay: command.phase & 2 != 0, supportsTransportResume: command.phase & 4 != 0)
+                host.start(offer, chooseDisplay: command.phase & 2 != 0, supportsTransportResume: command.phase & 4 != 0,
+                           adaptive: command.phase & 8 != 0)
             }
             return
         }
@@ -340,10 +365,16 @@ final class PhoneReceiver {
         onActivity?(session.name, normalized, sampleRate, clicked, paused || !cachedAccess)
     }
 
-    private func status(_ session: Session, state: String = "ready") {
+    private func status(_ session: Session, state: String = "ready", editableClick: Double? = nil) {
         guard let key = session.key else { return }
-        let status = PhoneProtocol.Status(state: state, name: Host.current().localizedName ?? "Mac",
+        var status = PhoneProtocol.Status(state: state, name: Host.current().localizedName ?? "Mac",
             accessibility: cachedAccess, paused: paused)
+        if state == "ready", !session.advertisedMirrorHosts {
+            let host = Host.current()
+            status.mirrorHosts = Array(Set(host.names + host.addresses + [status.name]))
+            session.advertisedMirrorHosts = true
+        }
+        status.editableClick = editableClick
         guard let data = try? JSONEncoder().encode(status) else { return }
         session.sent += 1
         guard let encrypted = try? PhoneProtocol.seal(data, key: key, sequence: session.sent, direction: 3) else { return }

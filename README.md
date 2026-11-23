@@ -15,6 +15,10 @@
 
 Mac 的 Debug 配置沿用开发版的鼠标控制方式。Release 配置启用了 App Sandbox 和蓝牙设备权限，用于验证 Mac App Store 分发版。发布前要用带签名的 Release 构建在真机上检查蓝牙发现、配对、全系统移动、点击、拖动和滚动。在 Xcode 的 Mac Scheme 中把 Run 的 Build Configuration 切到 Release 就能测试这份配置。
 
+## iPhone 直连系统屏幕共享
+
+在 iPhone 首页选择「内置屏幕共享」，可通过局域网发现或输入 VNC 地址连接 Mac。使用方法、两种认证、构建与真机验收见[系统远程桌面](docs/system-desktop.md)。
+
 ## 项目目录
 
 | 目录 | 内容 |

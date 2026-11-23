@@ -173,6 +173,9 @@ func installSmartTap(on view: UIView, single: UITapGestureRecognizer, motion: Pa
 
 /// Rebase when another finger lands; dispatch at most one system action per chord.
 final class PadMotionRecognizer: UIGestureRecognizer, UIGestureRecognizerDelegate {
+    var usesDesktopGestures: () -> Bool = { false }
+    var desktopPinch: ((CGFloat, CGPoint) -> Void)?
+    var gestureOrigin: CGPoint { origin }
     var available: () -> Bool = { true }
     var action: ((PhoneProtocol.PadGesture) -> Void)?
     var scroll: ((CGPoint, UInt8, CGPoint) -> Void)?
@@ -186,7 +189,7 @@ final class PadMotionRecognizer: UIGestureRecognizer, UIGestureRecognizerDelegat
     private var lastLanding: TimeInterval = 0
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        available() && padOption("fit")
+        available() && !usesDesktopGestures() && padOption("fit")
     }
     @objc func fit() { if available() { action?(.fit) } }
 
@@ -244,6 +247,26 @@ final class PadMotionRecognizer: UIGestureRecognizer, UIGestureRecognizerDelegat
         let (size, direction) = geometry()
         let scale = size / max(1, radius)
         let rotation = atan2(sin(direction - angle), cos(direction - angle))
+        if usesDesktopGestures() {
+            guard fingers.count == 2 else { return }
+            if mode == .pending {
+                let separation = abs(size - radius)
+                let travel = hypot(dx, dy)
+                if separation > 3 && separation > travel * 0.6 { mode = .scale }
+                else if travel > 7 { mode = .scroll }
+                else { return }
+                state = .began
+                if mode == .scroll { scroll?(.zero, 1, .zero) }
+            }
+            if mode == .scale {
+                desktopPinch?(scale, p)
+                radius = size
+            } else if mode == .scroll {
+                scroll?(CGPoint(x: p.x - last.x, y: p.y - last.y), 2, .zero)
+            }
+            last = p
+            return
+        }
         if mode == .pending {
             if fingers.count == 4 {
                 if abs(log(max(0.01, scale))) > 0.135 && abs(size - radius) >= 5 && padOption("four") {
