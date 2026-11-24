@@ -6,13 +6,15 @@ struct DesktopWorkspace: View {
     let connection: PhoneConnection
     @Environment(\.scenePhase) private var scenePhase
     let computer: DesktopComputer
+    let adaptive: Bool
     @ObservedObject var session: DesktopSession
     let disconnect: () -> Void
+    @AppStorage("linked.autoPictureInPicture") private var automaticPiP = true
 
     private enum Panel { case controls, display, quality, tools, shortcuts, modifiers, arrows, info }
     @Environment(\.verticalSizeClass) private var verticalSize
     @State private var immersive = false
-    private var split: Bool { verticalSize != .compact && !immersive }
+    private var split: Bool { !adaptive && verticalSize != .compact && !immersive }
     private var desktopAspect: CGFloat {
         let sides = session.resolution.components(separatedBy: " × ").compactMap(Double.init)
         return sides.count == 2 && sides[1] > 0 ? sides[0] / sides[1] : 1.6
@@ -20,6 +22,7 @@ struct DesktopWorkspace: View {
     @State private var panel: Panel?
     @State private var keyboard = false
     @State private var draft = ""
+    @State private var adaptiveCollapsed = false
     @State private var collapsed = true
     @State private var observing = false
     @State private var dragObjects = false
@@ -28,7 +31,9 @@ struct DesktopWorkspace: View {
     @State private var screenshotError = false
     @State private var modifiers: Set<Int> = []
     @FocusState private var composing: Bool
-    @AppStorage("screenSharing.layout") private var scale = "fit"
+    @AppStorage("screenSharing.layout") private var mirrorScale = "fit"
+    @State private var adaptiveScale = "fill"
+    private var layout: Binding<String> { adaptive ? $adaptiveScale : $mirrorScale }
     @AppStorage("screenSharing.quality") private var quality = 6
 
     private let cyan = Color(red: 0.47, green: 0.89, blue: 0.94)
@@ -50,6 +55,8 @@ struct DesktopWorkspace: View {
                     }
                     if let web = session.web {
                         DesktopCanvas(web: web)
+                            .opacity(scenePhase == .active ? 1 : 0.001)
+                            .background { MirrorPiPSource(video: session.mirrorVideo) }
                             .allowsHitTesting(false)
                             .overlay { MirrorTouchSurface(session: session, dragObjects: dragObjects) }
                             .frame(height: split ? min(geometry.size.width / desktopAspect, geometry.size.height * (keyboard ? 0.65 : 0.55)) : nil)
@@ -58,6 +65,7 @@ struct DesktopWorkspace: View {
                         HStack {
                             dockButton("ellipsis.circle", "Session Settings") { toggle(.controls) }
                             Spacer()
+                            pictureInPictureButton
                             dockButton("arrow.up.left.and.arrow.down.right", "Full Screen") { immersive = true }
                             dockButton("keyboard", "Keyboard", active: keyboard) { toggleKeyboard() }.disabled(observing)
                         }.padding(.horizontal)
@@ -78,7 +86,7 @@ struct DesktopWorkspace: View {
                     }
                     if !split {
                         if keyboard { composer }
-                        dock
+                        if adaptive { adaptiveDock } else { dock }
                     }
                 }
                 .frame(maxWidth: 470)
@@ -86,7 +94,12 @@ struct DesktopWorkspace: View {
                 .padding(.bottom, 7)
             }
             .overlay(alignment: .topTrailing) {
-                if session.canResetViewport && panel == nil && !collapsed {
+                if adaptive {
+                    Button(action: disconnect) {
+                        Image(systemName: "xmark").font(.title2).frame(width: 44, height: 44)
+                            .background(.regularMaterial, in: Circle())
+                    }.buttonStyle(.plain).padding(10).accessibilityLabel("Disconnect")
+                } else if session.canResetViewport && panel == nil && !collapsed {
                     Button(action: restoreOverview) {
                         Label("Overview", systemImage: "arrow.down.right.and.arrow.up.left")
                             .font(.subheadline.weight(.semibold))
@@ -105,12 +118,19 @@ struct DesktopWorkspace: View {
                 }
             }
         }
+        .alert("Picture in Picture couldn’t start", isPresented: Binding(get: { session.pictureInPicture.failed }, set: { session.pictureInPicture.failed = $0 })) {
+            Button("OK", role: .cancel) {}
+        }
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
         .onAppear {
+            session.pictureInPicture.attach(layer: session.mirrorVideo.layer, automatic: automaticPiP,
+                ready: { [weak session] in session?.connected == true },
+                pause: { [weak session] in session?.mirrorVideo.paused = $0 },
+                stop: { [weak session] in session?.stop() })
             configure()
             session.onMirrorClick = { point, token in
-                guard !observing, scenePhase == .active, connection.connected,
+                guard !adaptive, !observing, scenePhase == .active, connection.connected,
                       connection.accessibility, !connection.macPaused,
                       connection.mirrorHosts.contains(where: {
                           $0.trimmingCharacters(in: CharacterSet(charactersIn: ".")).caseInsensitiveCompare(
@@ -127,7 +147,7 @@ struct DesktopWorkspace: View {
         .onChange(of: scenePhase) { _, _ in session.cancelFocusRequest() }
         .onChange(of: panel) { _, _ in session.cancelFocusRequest() }
         .onReceive(connection.editableMirrorClick) { token in
-            guard session.focusRequest == token, session.connected, connection.connected,
+            guard !adaptive, session.focusRequest == token, session.connected, connection.connected,
                   scenePhase == .active, !observing, panel == nil else { return }
             toggleKeyboard(forceOpen: true)
         }
@@ -136,7 +156,8 @@ struct DesktopWorkspace: View {
             configure()
         }
         .onChange(of: split) { _, _ in configure() }
-        .onChange(of: scale) { _, _ in configure() }
+        .onChange(of: layout.wrappedValue) { _, _ in configure() }
+        .onChange(of: automaticPiP) { _, enabled in session.pictureInPicture.setAutomatic(enabled) }
         .onChange(of: quality) { _, _ in configure() }
         .sheet(isPresented: Binding(get: { shareImage != nil }, set: { if !$0 { shareImage = nil } })) {
             if let shareImage { DesktopImageShare(image: shareImage) }
@@ -161,6 +182,30 @@ struct DesktopWorkspace: View {
             .frame(maxWidth: .infinity).frame(height: 44)
     }
 
+    private var adaptiveDock: some View {
+        HStack(spacing: 1) {
+            dockButton(adaptiveCollapsed ? "ellipsis" : "chevron.down", "Toggle Controls") {
+                adaptiveCollapsed.toggle()
+                panel = nil
+                keyboard = false
+                composing = false
+            }
+            if !adaptiveCollapsed {
+                dockButton("macwindow.on.rectangle", "App Windows") { session.send(key: 0xff54, modifiers: [control]) }
+                    .disabled(observing)
+                dockButton("keyboard", "Keyboard", active: keyboard) { toggleKeyboard() }
+                    .disabled(observing)
+                dockButton("command", "Modifier Keys", active: panel == .modifiers) { toggle(.modifiers) }
+                    .disabled(observing)
+                dockButton("hand.point.up.left", "Drag", active: dragObjects) { dragObjects.toggle() }
+                    .disabled(observing)
+                dockButton("magnifyingglass", "Display", active: panel == .display) { toggle(.display) }
+            }
+        }
+        .padding(4)
+        .background(.regularMaterial, in: Capsule())
+    }
+
     private var dock: some View {
         HStack(spacing: 3) {
             dockButton(collapsed ? "rectangle.expand.vertical" : "chevron.down", "Toggle Controls") {
@@ -169,6 +214,7 @@ struct DesktopWorkspace: View {
                 keyboard = false
                 composing = false
             }
+            pictureInPictureButton
             if immersive { dockButton("rectangle.split.1x2", "Trackpad") { immersive = false } }
             if !collapsed {
                 dockButton("keyboard", "Keyboard", active: keyboard) { toggleKeyboard() }
@@ -187,6 +233,11 @@ struct DesktopWorkspace: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.14)))
         .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var pictureInPictureButton: some View {
+        dockButton("pip.enter", "Picture in Picture", active: session.pictureInPicture.active) { session.pictureInPicture.start() }
+            .disabled(!session.pictureInPicture.possible || session.pictureInPicture.active)
     }
 
     private func dockButton(_ icon: String, _ name: LocalizedStringKey, active: Bool = false,
@@ -237,6 +288,7 @@ struct DesktopWorkspace: View {
             }.buttonStyle(.plain)
             switch active {
             case .controls:
+                Toggle("Start PiP on Home", isOn: $automaticPiP)
                 setting("Display", icon: "aspectratio", next: .display)
                 setting("Picture Quality", icon: "photo", next: .quality)
                 setting("Tools", icon: "wrench.and.screwdriver", next: .tools)
@@ -249,9 +301,9 @@ struct DesktopWorkspace: View {
                 Button("Disconnect", systemImage: "power", role: .destructive, action: disconnect)
                     .frame(minHeight: 42)
             case .display:
-                choice("Fit Entire Screen", value: "fit", current: $scale)
-                choice("Fill Screen", value: "fill", current: $scale)
-                choice("Original Size", value: "actual", current: $scale)
+                choice("Fit Entire Screen", value: "fit", current: layout)
+                choice("Fill Screen", value: "fill", current: layout)
+                choice("Original Size", value: "actual", current: layout)
                 Text("Pinch to zoom. Drag with two fingers to move the enlarged view.")
                     .font(.footnote).foregroundStyle(.secondary)
                 Divider()
@@ -398,13 +450,33 @@ struct DesktopWorkspace: View {
     }
 
     private func restoreOverview() {
-        scale = "fit"
+        layout.wrappedValue = "fit"
         session.resetViewport()
     }
 
     private func configure() {
-        session.configure(scale: scale, observing: observing, quality: quality)
+        session.configure(scale: layout.wrappedValue, observing: observing, quality: quality, adaptive: adaptive)
     }
+}
+
+private struct MirrorPiPSource: UIViewRepresentable {
+    let video: MirrorVideo
+
+    final class SourceView: UIView {
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            layer.sublayers?.first?.frame = bounds
+        }
+    }
+
+    func makeUIView(context: Context) -> SourceView {
+        let view = SourceView()
+        video.layer.videoGravity = .resizeAspect
+        view.layer.addSublayer(video.layer)
+        return view
+    }
+
+    func updateUIView(_ view: SourceView, context: Context) {}
 }
 
 private struct DesktopCanvas: UIViewRepresentable {

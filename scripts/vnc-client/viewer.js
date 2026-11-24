@@ -112,6 +112,41 @@ window.adjustViewport = (u, v, nextU, nextV, ratio) => {
     const point = (x, y) => ({x: x * main.clientWidth, y: y * main.clientHeight});
     session.moveViewport(point(u, v), point(nextU, nextV), ratio);
 };
+// Publish from completed VNC paints. A trailing update preserves the last frame of a burst.
+function prepareMirrorVideo(canvas) {
+    const surface = document.createElement('canvas');
+    const ctx = surface.getContext('2d', {alpha: false});
+    let last = -Infinity;
+    let timer;
+    function publish() {
+        timer = undefined;
+        if (!canvas.width || !canvas.height || channel.readyState !== 'open') return;
+        const scale = Math.min(1, 720 / Math.max(canvas.width, canvas.height));
+        const width = Math.max(2, Math.round(canvas.width * scale / 2) * 2);
+        const height = Math.max(2, Math.round(canvas.height * scale / 2) * 2);
+        if (surface.width !== width || surface.height !== height) {
+            surface.width = width;
+            surface.height = height;
+        }
+        ctx.drawImage(canvas, 0, 0, width, height);
+        post('mirrorFrame', surface.toDataURL('image/jpeg', 0.78).split(',')[1]);
+        last = performance.now();
+    }
+    const display = session._display;
+    const flip = display.flip.bind(display);
+    display.flip = (...args) => {
+        flip(...args);
+        if (display.pending() && !args[0]) return;
+        const delay = 100 - (performance.now() - last);
+        if (delay <= 0) {
+            clearTimeout(timer);
+            publish();
+        } else if (timer === undefined) {
+            timer = setTimeout(publish, delay);
+        }
+    };
+    publish();
+}
 window.begin = (username, password, method) => {
     const expected = method === 'account' ? 30 : 2;
     // Pin the selected credential type, including RFB 3.3 server-selected authentication.
@@ -120,6 +155,13 @@ window.begin = (username, password, method) => {
         _negotiateAuthentication() {
             if (this._rfbAuthScheme !== expected) return this._fail('Authentication method unavailable');
             return super._negotiateAuthentication();
+        }
+        _screenSize() {
+            const size = super._screenSize();
+            if (!this.resizeSession) return size;
+            const factor = Math.min(2, 1920 / Math.max(1, size.w, size.h));
+            return {w: Math.max(2, 2 * Math.round(size.w * factor / 2)),
+                    h: Math.max(2, 2 * Math.round(size.h * factor / 2))};
         }
         _updateScale() {
             const width = main.clientWidth, height = main.clientHeight;
@@ -137,6 +179,7 @@ window.begin = (username, password, method) => {
                 left: frame.left + 'px',
                 top: frame.top + 'px'
             });
+
         }
         moveViewport(previous, point, ratio) {
             if (!main.clientWidth || !main.clientHeight || !this._fbWidth || !this._fbHeight) return;
@@ -163,7 +206,10 @@ window.begin = (username, password, method) => {
     session._screen.style.position = 'relative';
     session._screen.style.overflow = 'hidden';
     session.scaleViewport = true;
-    session.addEventListener('connect', () => post('connected'));
+    session.addEventListener('connect', () => {
+        post('connected');
+        try { prepareMirrorVideo(session._canvas); } catch { post('mirrorPiP', 'unavailable'); }
+    });
     session.addEventListener('securityfailure', () => post('authError'));
     session.addEventListener('disconnect', () => post('ended'));
 };
@@ -179,11 +225,12 @@ window.specialKey = (code, modifiers) => {
     session.sendKey(code);
     for (const modifier of modifiers.slice().reverse()) session.sendKey(modifier, undefined, false);
 };
-window.configure = (scale, observing, quality) => {
+window.configure = (scale, observing, quality, adaptive = false) => {
     if (observing && padButtons) { padButtons = 0; pointer(0); }
     window.endScroll();
     if (viewport.layout !== scale) viewport.reset(scale);
     session.viewOnly = observing;
+    session.resizeSession = adaptive;
     session.qualityLevel = quality;
     session.compressionLevel = quality === 3 ? 7 : 2;
     session._updateScale();

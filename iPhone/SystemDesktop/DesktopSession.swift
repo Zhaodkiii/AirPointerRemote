@@ -36,6 +36,10 @@ struct MirrorWheelMotion {
 final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WKScriptMessageHandler {
     @Published private(set) var connected = false
     @Published private(set) var status = "正在连接…"
+    let mirrorVideo = MirrorVideo()
+    #if os(iOS)
+    let pictureInPicture = DesktopPictureInPicture()
+    #endif
     @Published private(set) var resolution = ""
     @Published private(set) var canResetViewport = false
     @Published private(set) var authenticationRejected = false
@@ -59,6 +63,11 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
         credentials = ["username": username, "password": password, "method": account ? "account" : "vnc"]
         authenticated = onConnected
         let config = WKWebViewConfiguration()
+        #if os(iOS)
+        config.allowsInlineMediaPlayback = true
+        config.allowsPictureInPictureMediaPlayback = true
+        #endif
+        config.mediaTypesRequiringUserActionForPlayback = []
         config.websiteDataStore = .nonPersistent()
         config.userContentController.add(self, name: "desktop")
         let view = WKWebView(frame: .zero, configuration: config)
@@ -126,6 +135,8 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
         case "connected":
             timeout?.cancel(); connected = true; status = "已连接"
             authenticated?(); authenticated = nil
+        case "mirrorFrame":
+            if let value = body["value"], let jpeg = Data(base64Encoded: value) { mirrorVideo.receive(jpeg) }
         case "resolution": resolution = body["value"] ?? ""
         case "overview": canResetViewport = body["value"] == "yes"
         case "authError":
@@ -148,9 +159,9 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
         run("specialKey(key, modifiers)", ["key": key, "modifiers": modifiers])
     }
 
-    func configure(scale: String, observing: Bool, quality: Int) {
-        run("configure(scale, observing, quality)", [
-            "scale": scale, "observing": observing, "quality": quality
+    func configure(scale: String, observing: Bool, quality: Int, adaptive: Bool = false) {
+        run("configure(scale, observing, quality, adaptive)", [
+            "scale": scale, "observing": observing, "quality": quality, "adaptive": adaptive
         ])
     }
 
@@ -217,6 +228,10 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
 
     private func fail(_ message: String) { stop(); status = message }
     func stop() {
+        #if os(iOS)
+        pictureInPicture.reset()
+        #endif
+        mirrorVideo.reset()
         cancelFocusRequest()
         timeout?.cancel(); timeout = nil
         transport?.stateUpdateHandler = nil; transport?.cancel(); transport = nil

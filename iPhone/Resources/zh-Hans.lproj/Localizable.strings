@@ -384,3 +384,11 @@
 "Desktop Mode" = "桌面模式";
 "Mirror Mac Screen" = "镜像 Mac 屏幕";
 "The current Mac window moves to iPhone and returns when you disconnect." = "连接后，当前 Mac 窗口会移到 iPhone 专用桌面。断开后窗口返回 Mac。";
+"Mac keyboard request timed out" = "Mac 键盘请求超时";
+"Tap the keyboard button to ask the Mac again." = "请再点一次键盘按钮，重新查询 Mac 的输入焦点。";
+"Connect with Mac Screen Sharing. If the Mac supports resizing, the desktop follows your iPhone’s screen size." = "通过 Mac 的系统屏幕共享连接。若 Mac 支持调整分辨率，桌面会随 iPhone 的屏幕尺寸调整。";
+"Sign in as the current Mac user to control a private, iPhone-sized desktop. The Mac display goes dark until you disconnect." = "使用 Mac 当前已登录的账户连接专用桌面。桌面随 iPhone 尺寸调整，Mac 实体屏幕在会话期间变黑。";
+"Use the account currently signed in on the Mac." = "请输入 Mac 当前已登录用户的账户和密码。";
+"The Mac did not establish a high-performance desktop at the iPhone’s aspect ratio." = "Mac 未能建立与 iPhone 屏幕比例匹配的高性能桌面。请检查网络和 Mac 的屏幕共享设置。";
+"The Mac disconnected." = "Mac 连接已断开。";
+"High-performance screen sharing ended." = "高性能屏幕共享已结束。";

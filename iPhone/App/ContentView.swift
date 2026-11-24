@@ -7,9 +7,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var phase
     @State private var inlineRequested = false
     @State private var linkedScreen = false
-    @State private var preferAdaptiveDesktop = false
     @AppStorage("linked.autoPictureInPicture") private var automaticPiP = true
-    @State private var pendingDesktopPair = false
     @State private var systemDesktop = false
     @State private var settings = false
     @State private var showHelp = false
@@ -58,7 +56,6 @@ struct ContentView: View {
                             controller.suspendInteraction(true)
                             if sharing.running { connection.send(.init(.linkedInput)) }
                             sharing.hideKeyboard()
-                            preferAdaptiveDesktop = false
                             linkedScreen = true
                         } label: {
                             Image(systemName: "rectangle.connected.to.line.below")
@@ -73,8 +70,7 @@ struct ContentView: View {
                 if sharing.pipState == .idle && !sharing.running { inlineRequested = false }
                 updateSharingPresentation()
             }) {
-                LinkedScreenView(connection: connection, client: sharing, startPiP: startPiP, automaticPiP: $automaticPiP,
-                                 preferAdaptive: preferAdaptiveDesktop)
+                LinkedScreenView(connection: connection, client: sharing, startPiP: startPiP, automaticPiP: $automaticPiP)
             }
             .onAppear {
                 let cover = $linkedScreen
@@ -119,10 +115,8 @@ struct ContentView: View {
             .onChange(of: settings) { _, _ in updateSharingPresentation() }
             .onChange(of: showSetup) { _, _ in updateSharingPresentation() }
             .onChange(of: showHelp) { _, _ in updateSharingPresentation() }
-            .onChange(of: connection.connected) { _, connected in
+            .onChange(of: connection.connected) { _, _ in
                 sharing.connectionChanged(connection)
-                if connected && pendingDesktopPair && systemDesktop { openAdaptiveDesktop() }
-                pendingDesktopPair = false
             }
             .onChange(of: connection.macPaused) { _, paused in
                 if paused { sharing.end(String(localized: "Control paused on the Mac.")) }
@@ -243,11 +237,7 @@ struct ContentView: View {
                     VStack(spacing: 10) { connectionChoices }
                 }
                 if systemDesktop {
-                    SystemDesktopHome(
-                        connection: connection,
-                        openAdaptive: openAdaptiveDesktop,
-                        pairing: { devices }
-                    )
+                    SystemDesktopHome(connection: connection)
                 } else { devices }
             }
             .padding(.vertical, 8)
@@ -287,14 +277,6 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    private func openAdaptiveDesktop() {
-        guard connection.connected else { return }
-        if sharing.running { sharing.end(keepDraft: true); inlineRequested = false }
-        preferAdaptiveDesktop = true
-        controller.suspendInteraction(true)
-        linkedScreen = true
     }
 
     private func selectSystemDesktop() {
@@ -340,7 +322,6 @@ struct ContentView: View {
                 }
                 ForEach(connection.nearby) { mac in
                     Button {
-                        pendingDesktopPair = systemDesktop
                         connection.connect(mac)
                     } label: {
                         HStack {

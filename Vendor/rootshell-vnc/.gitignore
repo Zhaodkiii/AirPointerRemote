@@ -1,0 +1,22 @@
+.DS_Store
+**/.DS_Store
+
+# Swift Package Manager
+.build/
+**/.build/
+**/.swiftpm/xcode/xcuserdata/
+/Package.resolved
+.swift-module-cache/
+
+# Xcode
+DerivedData/
+**/DerivedData/
+**/xcuserdata/
+*.xcuserstate
+
+# Profiling and diagnostics
+*.profraw
+*.profdata
+
+# Local Debug builds with release optimization (see Package.swift)
+/.optimize-debug

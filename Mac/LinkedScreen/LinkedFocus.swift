@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import OSLog
 
 /// Reads selected text only for an explicit selection-edit transaction.
 final class LinkedFocus {
@@ -16,17 +17,29 @@ final class LinkedFocus {
         token = nil
     }
 
+    private let log = Logger(subsystem: "com.daokaihua.airpointerremote", category: "LinkedFocus")
     private var preparedEditorPID: pid_t?
 
     func prepareForClick() {
         guard AXIsProcessTrusted(), let app = NSWorkspace.shared.frontmostApplication,
               preparedEditorPID != app.processIdentifier else { return }
-        preparedEditorPID = app.processIdentifier
-        guard let url = app.bundleURL,
-              FileManager.default.fileExists(atPath: url.appendingPathComponent("Contents/Frameworks/Electron Framework.framework").path) else { return }
+        guard let frameworks = app.bundleURL?.appendingPathComponent("Contents/Frameworks") else { return }
+        let files = FileManager.default
+        let electron = files.fileExists(atPath: frameworks.appendingPathComponent("Electron Framework.framework").path)
+        let chromium = electron || ((try? files.contentsOfDirectory(at: frameworks, includingPropertiesForKeys: nil)) ?? [])
+            .contains { $0.pathExtension == "framework" && files.fileExists(atPath: $0.appendingPathComponent("Resources/chrome_100_percent.pak").path) }
+        guard chromium else {
+            preparedEditorPID = app.processIdentifier
+            return
+        }
         let owner = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(owner, 0.12)
-        AXUIElementSetAttributeValue(owner, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        var result = electron ? AXUIElementSetAttributeValue(owner, "AXManualAccessibility" as CFString, kCFBooleanTrue) : .attributeUnsupported
+        if result != .success {
+            result = AXUIElementSetAttributeValue(owner, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+        }
+        if result == .success { preparedEditorPID = app.processIdentifier }
+        log.info("Preparing Chromium accessibility for PID \(app.processIdentifier): AX result \(result.rawValue)")
     }
 
     func refresh() {

@@ -176,10 +176,12 @@ struct LinkedWorkspace: View {
             showPreviewHint = false
         }
         .onChange(of: client.canPoint) { _, enabled in if !enabled { releaseLeft() } }
-        .alert("Select an editable Mac field", isPresented: $client.fieldRequired) {
+        .alert(Text(client.focusQueryTimedOut ? LocalizedStringKey("Mac keyboard request timed out") : LocalizedStringKey("Select an editable Mac field")), isPresented: $client.fieldRequired) {
             Button("OK", role: .cancel) {}
         } message: {
-            if client.sandboxedFieldUnavailable {
+            if client.focusQueryTimedOut {
+                Text("Tap the keyboard button to ask the Mac again.")
+            } else if client.sandboxedFieldUnavailable {
                 Text("For keyboard support in other Mac apps, use the notarized Mac receiver included with AirPointer.")
             } else { Text("Click a text field on the shared Mac to use the keyboard.") }
         }

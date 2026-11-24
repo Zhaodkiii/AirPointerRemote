@@ -31,6 +31,7 @@ final class LinkedClient: ObservableObject {
     private var target: UUID?
     private var focusQuery: UUID?
     @Published var fieldRequired = false
+    @Published var focusQueryTimedOut = false
     @Published var sandboxedFieldUnavailable = false
     private var pendingKeyboardClick: (id: UUID, time: TimeInterval)?
     let video = AVSampleBufferDisplayLayer()
@@ -605,6 +606,7 @@ final class LinkedClient: ObservableObject {
         if focus != nil { openKeyboard(); return }
         let id = UUID()
         focusQuery = id
+        focusQueryTimedOut = false
         sandboxedFieldUnavailable = false
         var query = LinkedMessage(.alive)
         query.focusQuery = id
@@ -613,7 +615,12 @@ final class LinkedClient: ObservableObject {
             guard let self, self.focusQuery == id else { return }
             self.focusQuery = nil
             guard self.uiActive, self.live, !self.resuming else { return }
-            if self.focus != nil { self.openKeyboard() } else { self.fieldRequired = true }
+            if self.focus != nil {
+                self.openKeyboard()
+            } else {
+                self.focusQueryTimedOut = true
+                self.fieldRequired = true
+            }
         }
     }
 

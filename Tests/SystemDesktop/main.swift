@@ -1,4 +1,5 @@
 import AppKit
+import CoreVideo
 import SwiftUI
 import WebKit
 @MainActor func test() {
@@ -28,6 +29,25 @@ import WebKit
         RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
     guard redPixel else { print("framebuffer pixel mismatch"); exit(1) }
+    // The PiP player must receive actual framebuffer pixels, including on a static desktop.
+    func playerShows(_ channel: Int) -> Bool {
+        var matches = false
+        let deadline = Date().addingTimeInterval(4)
+        while !matches && Date() < deadline {
+            if let buffer = session.mirrorVideo.lastFrame {
+                CVPixelBufferLockBaseAddress(buffer, .readOnly)
+                if let pixel = CVPixelBufferGetBaseAddress(buffer)?.assumingMemoryBound(to: UInt8.self) {
+                    matches = pixel[2 - channel] > 200 && pixel[1 + channel] < 40 && pixel[0] < 40
+                }
+                CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        return matches
+    }
+    guard playerShows(0) else { print("PiP first frame mismatch"); exit(1) }
+    session.send(key: 67)
+    guard playerShows(1) else { print("PiP did not receive the next framebuffer update"); exit(1) }
     guard session.resolution == "2 × 2" else { print("resolution metadata mismatch"); exit(1) }
     var viewportPassed = false
     session.web?.evaluateJavaScript("""
@@ -99,6 +119,7 @@ import WebKit
     session.pad("pulse", 1)
     settle()
     guard probes.count == 3 else { print("missing trackpad focus probe"); exit(1) }
+    session.configure(scale: "fill", observing: false, quality: 6, adaptive: true)
     session.send(text: "A")
     session.send(key: 0xff09, modifiers: [0xffeb])
     RunLoop.current.run(until: Date().addingTimeInterval(0.5))

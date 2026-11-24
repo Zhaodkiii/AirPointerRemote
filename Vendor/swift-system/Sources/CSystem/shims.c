@@ -1,0 +1,173 @@
+/*
+ This source file is part of the Swift System open source project
+
+ Copyright (c) 2020 - 2026 Apple Inc. and the Swift System project authors
+ Licensed under Apache License v2.0 with Runtime Library Exception
+
+ See https://swift.org/LICENSE.txt for license information
+*/
+
+#if defined(__FreeBSD__)
+#define __BSD_VISIBLE
+#endif
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#include <unistd.h>
+#endif
+
+#ifdef __linux__
+#define _GNU_SOURCE
+#include <signal.h>
+#include <sys/statvfs.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#include <CSystemLinux.h>
+
+unsigned long long _system_get_ST_RDONLY(void) { return ST_RDONLY; }
+unsigned long long _system_get_ST_NOSUID(void) { return ST_NOSUID; }
+unsigned long long _system_get_ST_NODEV(void) { return ST_NODEV; }
+unsigned long long _system_get_ST_NOEXEC(void) { return ST_NOEXEC; }
+unsigned long long _system_get_ST_SYNCHRONOUS(void) { return ST_SYNCHRONOUS; }
+unsigned long long _system_get_ST_MANDLOCK(void) { return ST_MANDLOCK; }
+unsigned long long _system_get_ST_NOATIME(void) { return ST_NOATIME; }
+unsigned long long _system_get_ST_NODIRATIME(void) { return ST_NODIRATIME; }
+unsigned long long _system_get_ST_RELATIME(void) { return ST_RELATIME; }
+
+// ST_NOSYMFOLLOW wasn't defined until glibc 2.34. 0x2000 is the bit the
+// kernel's internal <linux/statfs.h> and newer glibc both use.
+#ifndef ST_NOSYMFOLLOW
+#define ST_NOSYMFOLLOW 0x2000
+#endif
+unsigned long long _system_get_ST_NOSYMFOLLOW(void) { return ST_NOSYMFOLLOW; }
+#endif
+
+#include <errno.h>
+#include <string.h>
+
+#include <CSystemShared.h>
+
+static int csystem_strerror_r_impl(int errnum, char *buf, size_t buflen) {
+#if defined(_WIN32)
+  return strerror_s(buf, buflen, errnum);
+#elif defined(_GNU_SOURCE) && \
+    (defined(__GLIBC__) || (defined(__ANDROID__) && __ANDROID_API__ >= 23))
+  // With _GNU_SOURCE (defined above on Linux), glibc and bionic provide the
+  // GNU variant, which returns a pointer to the message. That pointer is
+  // either `buf` or an immutable static string, so copying from it is safe.
+  const char *message = strerror_r(errnum, buf, buflen);
+  if (message == NULL) {
+    return EINVAL;
+  }
+  if (message != buf) {
+    size_t length = strlen(message);
+    if (length >= buflen) {
+      memcpy(buf, message, buflen - 1);
+      buf[buflen - 1] = '\0';
+      return ERANGE;
+    }
+    memcpy(buf, message, length + 1);
+  }
+  return 0;
+#else
+  // XSI variant (Darwin, FreeBSD, OpenBSD, musl, WASI). Some implementations
+  // return -1 and set errno instead of returning the error number.
+  int result = strerror_r(errnum, buf, buflen);
+  if (result == -1) {
+    result = errno;
+  }
+  return result;
+#endif
+}
+
+extern int csystem_strerror_r(int errnum, char *buf, size_t buflen) {
+  if (buf == NULL || buflen == 0) {
+    return ERANGE;
+  }
+  buf[0] = '\0';
+  int result = csystem_strerror_r_impl(errnum, buf, buflen);
+  buf[buflen - 1] = '\0';
+  // strerror_s on Windows and bionic's strerror_r silently truncate the
+  // message and return 0. Report a message that fills the whole buffer as
+  // ERANGE on every platform, since it may have been truncated.
+  if (result == 0 && strlen(buf) == buflen - 1) {
+    result = ERANGE;
+  }
+  return result;
+}
+
+#if !defined(_WIN32) && !defined(__wasi__) && !defined(__APPLE__)
+#define HAVE_PIPE2_DUP3
+#endif
+
+#if defined(__APPLE__)
+#include <Availability.h>
+#if defined(__MAC_27_0)
+#include <unistd.h>
+#define HAVE_PIPE2_DUP3
+#endif
+#endif // defined(__APPLE__)
+
+// Wrappers are required because _GNU_SOURCE causes a conflict with other imports when defined in CSystemLinux.h
+
+#if !defined(_WIN32)
+extern int csystem_posix_pipe2(int fildes[2], int flag) {
+  #if defined(__APPLE__) && defined(HAVE_PIPE2_DUP3)
+  if (__builtin_available(macOS 27, iOS 27, tvOS 27, watchOS 27, visionOS 27, *))
+    return pipe2(fildes, flag);
+  __builtin_trap();
+  #elif defined(HAVE_PIPE2_DUP3)
+  return pipe2(fildes, flag);
+  #else
+  errno = ENOSYS;
+  return -1;
+  #endif
+}
+#endif // !defined(_WIN32)
+
+extern int csystem_posix_dup3(int fildes, int fildes2, int flag) {
+  #if defined(__APPLE__) && defined(HAVE_PIPE2_DUP3)
+  if (__builtin_available(macOS 27, iOS 27, tvOS 27, watchOS 27, visionOS 27, *))
+    return dup3(fildes, fildes2, flag);
+  __builtin_trap();
+  #elif defined(HAVE_PIPE2_DUP3)
+  return dup3(fildes, fildes2, flag);
+  #else
+  errno = ENOSYS;
+  return -1;
+  #endif
+}
+
+#if defined(__linux__) && !defined(__ANDROID__)
+# ifndef __NR_io_uring_setup
+#  define __NR_io_uring_setup		425
+# endif
+# ifndef __NR_io_uring_enter
+#  define __NR_io_uring_enter		426
+# endif
+# ifndef __NR_io_uring_register
+#  define __NR_io_uring_register	427
+# endif
+
+extern int csystem_io_uring_setup(unsigned int entries,
+                                  struct io_uring_params *p) {
+  return syscall(__NR_io_uring_setup, entries, p);
+}
+
+extern int csystem_io_uring_enter2(int fd, unsigned int to_submit,
+                                   unsigned int min_complete,
+                                   unsigned int flags, void *args, size_t sz) {
+  return syscall(__NR_io_uring_enter, fd, to_submit, min_complete, flags,
+                 args, sz);
+}
+
+extern int csystem_io_uring_enter(int fd, unsigned int to_submit,
+                                  unsigned int min_complete,
+                                  unsigned int flags, void *sig) {
+  return csystem_io_uring_enter2(fd, to_submit, min_complete, flags, sig,
+                                 _NSIG / 8);
+}
+
+extern int csystem_io_uring_register(int fd, unsigned int opcode, void *arg,
+                                     unsigned int nr_args) {
+  return syscall(__NR_io_uring_register, fd, opcode, arg, nr_args);
+}
+#endif // defined(__linux__) && !defined(__ANDROID__)

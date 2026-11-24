@@ -45,7 +45,19 @@ for method in ['vnc','account']:
             else:
                 raise AssertionError(kind)
         c.sendall(struct.pack('>BBHHHHHi',0,0,1,0,0,2,2,0)+bytes([255,0,0,0])*4)
-        output=f.read()
+        # The viewer sends C after it has observed the first red video frame.
+        sent = bytearray()
+        while not sent.endswith(struct.pack('>BBHI', 4, 1, 0, 67)):
+            byte = f.read(1)
+            assert byte, "viewer ended before receiving the first PiP frame"
+            sent.extend(byte)
+        c.sendall(struct.pack('>BBHHHHHi',0,0,1,0,0,2,2,0)+bytes([0,255,0,0])*4)
+        if method == 'account':
+            c.sendall(struct.pack('>BBHHHHHi',0,0,1,0,0,2,2,-308)
+                      + struct.pack('>B3xIHHHHI',1,7,0,0,2,2,0))
+        output=bytes(sent)+f.read()
+        header = struct.pack('>BBHHBB',251,0,320,240,1,0)
+        assert (header in output) == (method == 'account')
         assert struct.pack('>BBHI', 4, 1, 0, 65) in output
         assert struct.pack('>BBHI', 4, 1, 0, 66) not in output
         # The direct swipe starts in the top-left pixel and moves upwards.

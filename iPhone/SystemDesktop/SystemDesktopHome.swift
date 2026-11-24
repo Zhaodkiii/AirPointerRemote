@@ -1,10 +1,9 @@
 import SwiftUI
 import WebKit
+import rootshellVNC
 
-struct SystemDesktopHome<Pairing: View>: View {
+struct SystemDesktopHome: View {
     @ObservedObject var connection: PhoneConnection
-    let openAdaptive: () -> Void
-    @ViewBuilder let pairing: () -> Pairing
     @State private var mirror = false
 
     private struct LoginTarget: Identifiable {
@@ -65,51 +64,45 @@ struct SystemDesktopHome<Pairing: View>: View {
                 Text("Mirror Mac Screen").tag(true)
             }.pickerStyle(.segmented)
             if !mirror {
-                Text("The current Mac window moves to iPhone and returns when you disconnect.")
+                Text("Sign in as the current Mac user to control a private, iPhone-sized desktop. The Mac display goes dark until you disconnect.")
                     .font(.subheadline).foregroundStyle(.secondary)
-                if connection.connected {
-                    Button("Open iPhone Desktop", action: openAdaptive).buttonStyle(.borderedProminent)
-                } else {
-                    pairing()
-                }
-            } else {
-                if !computers.isEmpty {
-                    Text("My Macs").font(.headline).accessibilityAddTraits(.isHeader)
-                    ForEach(computers) { row($0, saved: true) }
-                }
-                if !nearby.isEmpty || computers.isEmpty {
-                    Text("Macs on Your Network").font(.headline).accessibilityAddTraits(.isHeader)
-                    if nearby.isEmpty {
-                        Text(discovery.status).font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    ForEach(nearby) { row($0, saved: false) }
-                }
-                DisclosureGroup("Enter an Address", isExpanded: $manual) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        TextField("IP address, mac.local, or vnc:// address", text: $address)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .textFieldStyle(.roundedBorder)
-                            .submitLabel(.go)
-                            .focused($addressFocused)
-                            .onSubmit(connectByAddress)
-                        Button("Continue", action: connectByAddress).buttonStyle(.borderedProminent)
-                            .disabled(DesktopComputer.parse(address) == nil)
-                    }.padding(.top, 8)
-                }
-                .padding(14)
-                .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-                DisclosureGroup("Set Up Screen Sharing on Your Mac") {
-                    Text("On your Mac, open System Settings → General → Sharing and turn on Screen Sharing. Allow your Mac account in the service settings. For a VNC password, enable password control there. Connect both devices to the same trusted network.")
-                        .font(.subheadline).foregroundStyle(.secondary).padding(.top, 8)
-                }
-                .padding(14)
-                .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
             }
+            if !computers.isEmpty {
+                Text("My Macs").font(.headline).accessibilityAddTraits(.isHeader)
+                ForEach(computers) { row($0, saved: true) }
+            }
+            if !nearby.isEmpty || computers.isEmpty {
+                Text("Macs on Your Network").font(.headline).accessibilityAddTraits(.isHeader)
+                if nearby.isEmpty {
+                    Text(discovery.status).font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(nearby) { row($0, saved: false) }
+            }
+            DisclosureGroup("Enter an Address", isExpanded: $manual) {
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("IP address, mac.local, or vnc:// address", text: $address)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(.roundedBorder)
+                        .submitLabel(.go)
+                        .focused($addressFocused)
+                        .onSubmit(connectByAddress)
+                    Button("Continue", action: connectByAddress).buttonStyle(.borderedProminent)
+                        .disabled(DesktopComputer.parse(address) == nil)
+                }.padding(.top, 8)
+            }
+            .padding(14)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            DisclosureGroup("Set Up Screen Sharing on Your Mac") {
+                Text("On your Mac, open System Settings → General → Sharing and turn on Screen Sharing. Allow your Mac account in the service settings. For a VNC password, enable password control there. Connect both devices to the same trusted network.")
+                    .font(.subheadline).foregroundStyle(.secondary).padding(.top, 8)
+            }
+            .padding(14)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
         }
         .fullScreenCover(item: $selection) { target in
-            DesktopLogin(connection: connection, computer: target.computer, autoConnect: target.autoConnect) {
+            DesktopLogin(connection: connection, computer: target.computer, adaptive: !mirror, autoConnect: target.autoConnect) {
                 write([target.computer] + computers.filter { $0.id != target.id })
             }
         }
@@ -127,11 +120,15 @@ struct SystemDesktopHome<Pairing: View>: View {
 private struct DesktopLogin: View {
     let connection: PhoneConnection
     let computer: DesktopComputer
+    let adaptive: Bool
     let autoConnect: Bool
     let remember: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var phase
     @StateObject private var session = DesktopSession()
+    @AppStorage("linked.autoPictureInPicture") private var automaticPiP = true
+    @State private var highPerformance = HighPerformanceDesktop()
+    @Environment(\.displayScale) private var displayScale
     @State private var account = true
     @State private var username = ""
     @State private var password = ""
@@ -142,7 +139,7 @@ private struct DesktopLogin: View {
     @FocusState private var field: Field?
     private enum Field { case username, password }
 
-    private var connecting: Bool { session.web != nil && !session.connected }
+    private var connecting: Bool { adaptive ? highPerformance.connecting : session.web != nil && !session.connected }
     private var canConnect: Bool {
         !connecting && !password.isEmpty && (!account || !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
@@ -150,8 +147,37 @@ private struct DesktopLogin: View {
     var body: some View {
         NavigationStack {
             Group {
-                if session.connected {
-                    DesktopWorkspace(connection: connection, computer: computer, session: session) {
+                if adaptive && highPerformance.ready {
+                    RemoteDesktopView(session: highPerformance.session, isFullScreen: true)
+                        .ignoresSafeArea()
+                        .toolbar(.hidden, for: .navigationBar)
+                        .overlay(alignment: .topTrailing) {
+                            HStack {
+                                Button {
+                                    highPerformance.pictureInPicture.start()
+                                } label: {
+                                    Image(systemName: "pip.enter").frame(width: 44, height: 44)
+                                        .background(.regularMaterial, in: Circle())
+                                }
+                                .accessibilityLabel("Picture in Picture")
+                                .disabled(!highPerformance.pictureInPicture.possible || highPerformance.pictureInPicture.active)
+                                Button {
+                                    highPerformance.stop()
+                                    dismiss()
+                                } label: {
+                                    Image(systemName: "xmark").frame(width: 44, height: 44)
+                                        .background(.regularMaterial, in: Circle())
+                                }
+                                .accessibilityLabel("Disconnect")
+                            }
+                            .padding(.trailing, 8)
+                        }
+                        .onAppear { highPerformance.pictureInPicture.attach(to: highPerformance, automatic: automaticPiP) }
+                        .alert("Picture in Picture couldn’t start", isPresented: Binding(get: { highPerformance.pictureInPicture.failed }, set: { highPerformance.pictureInPicture.failed = $0 })) {
+                            Button("OK", role: .cancel) {}
+                        }
+                } else if !adaptive && session.connected {
+                    DesktopWorkspace(connection: connection, computer: computer, adaptive: false, session: session) {
                         session.stop()
                         dismiss()
                     }
@@ -159,13 +185,15 @@ private struct DesktopLogin: View {
                 } else {
                     Form {
                         Section {
-                            Picker("Authentication", selection: $account) {
-                                Text("Mac Account").tag(true)
-                                Text("VNC Password").tag(false)
-                            }
-                            .pickerStyle(.segmented)
-                            .onChange(of: account) { _, _ in password = "" }
+                            if !adaptive {
+                                Picker("Authentication", selection: $account) {
+                                    Text("Mac Account").tag(true)
+                                    Text("VNC Password").tag(false)
+                                }
+                                .pickerStyle(.segmented)
+                                .onChange(of: account) { _, _ in password = "" }
 
+                            }
                             if account {
                                 TextField("Mac Username", text: $username)
                                     .textContentType(.username)
@@ -178,7 +206,11 @@ private struct DesktopLogin: View {
                                 .focused($field, equals: .password)
                                 .submitLabel(.go).onSubmit(connect)
                         } footer: {
-                            Text(account ? "Use the account allowed in your Mac’s Screen Sharing settings." : "Use the dedicated VNC password configured on your Mac.")
+                            if adaptive {
+                                Text("Use the account currently signed in on the Mac.")
+                            } else {
+                                Text(account ? "Use the account allowed in your Mac’s Screen Sharing settings." : "Use the dedicated VNC password configured on your Mac.")
+                            }
                         }.disabled(connecting)
 
                         Section {
@@ -186,9 +218,9 @@ private struct DesktopLogin: View {
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                         if attempted && !connecting {
-                            Text(session.status).font(.subheadline).foregroundStyle(.secondary)
+                            Text(adaptive ? highPerformance.error ?? "" : session.status).font(.subheadline).foregroundStyle(.secondary)
                                 .listRowBackground(Color.clear)
-                            if !session.authenticationRejected, let saved = DesktopCredentials.load(for: computer) {
+                            if !adaptive, !session.authenticationRejected, let saved = DesktopCredentials.load(for: computer) {
                                 Button("Reconnect with Saved Sign-in") {
                                     account = saved.account
                                     username = saved.username
@@ -217,13 +249,20 @@ private struct DesktopLogin: View {
         .onAppear {
             guard !didLoad else { return }
             didLoad = true
-            if autoConnect, let saved = DesktopCredentials.load(for: computer) {
+            if autoConnect, let saved = DesktopCredentials.load(for: computer), !adaptive || saved.account {
                 account = saved.account
                 username = saved.username
                 begin(saved)
             }
         }
-        .onDisappear { session.stop() }
+        .background {
+            GeometryReader { geometry in
+                Color.clear.onChange(of: geometry.size, initial: true) { _, size in
+                    if adaptive && !highPerformance.ready { highPerformance.resize(size, scale: displayScale) }
+                }
+            }.ignoresSafeArea()
+        }
+        .onDisappear { highPerformance.stop(); session.stop() }
         .onChange(of: session.authenticationRejected) { _, rejected in
             if rejected { password = ""; field = .password }
         }
@@ -233,7 +272,18 @@ private struct DesktopLogin: View {
             Text("You can use this connection. The next sign-in may require your password again.")
         }
         .onChange(of: phase) { _, value in
-            if value == .background { session.stop(); password = ""; attempted = false }
+            if value == .active { highPerformance.pictureInPicture.foregrounded(); session.pictureInPicture.foregrounded() }
+            if value == .background {
+                if adaptive && highPerformance.ready {
+                    highPerformance.pictureInPicture.enteredBackground()
+                } else { highPerformance.stop() }
+                if !adaptive {
+                    if session.connected { session.pictureInPicture.enteredBackground() }
+                    else { session.stop() }
+                }
+                password = ""
+                attempted = false
+            }
         }
     }
     private func connect() {
@@ -244,10 +294,16 @@ private struct DesktopLogin: View {
     private func begin(_ credentials: DesktopCredentials) {
         field = nil
         attempted = true
-        session.start(computer, username: credentials.username, password: credentials.password, account: credentials.account) {
+        let didConnect = {
             storageFailed = !credentials.save(for: computer)
             remember()
             password = ""
+        }
+        if adaptive {
+            highPerformance.start(computer, credentials: credentials, connected: didConnect)
+        } else {
+            session.start(computer, username: credentials.username, password: credentials.password,
+                          account: credentials.account, onConnected: didConnect)
         }
     }
 }

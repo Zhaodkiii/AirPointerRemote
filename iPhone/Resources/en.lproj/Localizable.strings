@@ -227,3 +227,11 @@
 "Zoom Out" = "Zoom Out";
 "iPhone confirmed. On your Mac, choose Codes Match — Allow for %@" = "iPhone confirmed. On your Mac, choose Codes Match — Allow for %@";
 "iPhone stopped responding." = "iPhone stopped responding.";
+"Mac keyboard request timed out" = "Mac keyboard request timed out";
+"Tap the keyboard button to ask the Mac again." = "Tap the keyboard button to ask the Mac again.";
+"Connect with Mac Screen Sharing. If the Mac supports resizing, the desktop follows your iPhone’s screen size." = "Connect with Mac Screen Sharing. If the Mac supports resizing, the desktop follows your iPhone’s screen size.";
+"Sign in as the current Mac user to control a private, iPhone-sized desktop. The Mac display goes dark until you disconnect." = "Sign in as the current Mac user to control a private, iPhone-sized desktop. The Mac display goes dark until you disconnect.";
+"Use the account currently signed in on the Mac." = "Use the account currently signed in on the Mac.";
+"The Mac did not establish a high-performance desktop at the iPhone’s aspect ratio." = "The Mac did not establish a high-performance desktop at the iPhone’s aspect ratio.";
+"The Mac disconnected." = "The Mac disconnected.";
+"High-performance screen sharing ended." = "High-performance screen sharing ended.";

@@ -1,0 +1,67 @@
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Swift Collections open source project
+//
+// Copyright (c) 2026 Apple Inc. and the Swift project authors
+// Licensed under Apache License v2.0 with Runtime Library Exception
+//
+// See https://swift.org/LICENSE.txt for license information
+//
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+//
+//===----------------------------------------------------------------------===//
+
+#if compiler(>=6.4) && UnstableHashedContainers
+
+@available(SwiftStdlib 5.0, *)
+extension UniqueDictionary where Key: ~Copyable, Value: ~Copyable {
+  @inlinable
+  public mutating func removeValue(forKey key: borrowing Key) -> Value? {
+    let r = _storage._keys._find(key)
+    guard let bucket = r.bucket else { return nil }
+    return unsafe _removeValue(at: bucket)
+  }
+  
+  @inlinable
+  @unsafe
+  package mutating func _removeValue(at bucket: _Bucket) -> Value {
+    guard self.count <= _HTable.minimumCapacity(forScale: self._scale) else {
+      return _storage._removeValue(at: bucket)
+    }
+    
+    // Shrink storage.
+    let result = unsafe _storage._punchHole(at: bucket)
+    _resize(minimumCapacity: self.count)
+    return result
+  }
+
+  /// Remove the entry at `bucket`, assuming its value slot has already been
+  /// moved out (e.g., by `updateValue(forKey:with:)`). Shrinks storage the
+  /// same way as `_removeValue(at:)`.
+  @inlinable
+  @unsafe
+  package mutating func _removeEntry(withMovedValueAt bucket: _Bucket) {
+    guard self.count <= _HTable.minimumCapacity(forScale: self._scale) else {
+      unsafe _storage._keyPtr(at: bucket).deinitialize(count: 1)
+      unsafe _storage._resolveHole(at: bucket)
+      return
+    }
+
+    // Shrink storage. There is no need to restore hash table invariants first,
+    // as resizing rehashes every item anyway.
+    unsafe _storage._punchHole(withMovedValueAt: bucket)
+    _resize(minimumCapacity: self.count)
+  }
+  
+  @inlinable
+  @inline(__always)
+  public mutating func removeAll(keepingCapacity keepCapacity: Bool = false) {
+    if keepCapacity {
+      _storage.removeAll()
+    } else {
+      _storage = RigidDictionary()
+    }
+  }
+}
+
+#endif

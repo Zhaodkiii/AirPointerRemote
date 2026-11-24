@@ -1,0 +1,701 @@
+/*
+ This source file is part of the Swift System open source project
+
+ Copyright (c) 2023 - 2026 Apple Inc. and the Swift System project authors
+ Licensed under Apache License v2.0 with Runtime Library Exception
+
+ See https://swift.org/LICENSE.txt for license information
+*/
+
+#if compiler(>=6.2) && $Lifetimes
+#if os(Linux)
+
+public import CSystemIOUring
+
+@usableFromInline
+internal enum IORequestCore {
+    case nop  // nothing here
+    case openat(
+        atDirectory: FileDescriptor,
+        path: FilePath,
+        FileDescriptor.AccessMode,
+        options: FileDescriptor.OpenOptions = FileDescriptor.OpenOptions(),
+        permissions: FilePermissions? = nil,
+        context: UInt64 = 0
+    )
+    case openatSlot(
+        atDirectory: FileDescriptor,
+        path: FilePath,
+        FileDescriptor.AccessMode,
+        options: FileDescriptor.OpenOptions = FileDescriptor.OpenOptions(),
+        permissions: FilePermissions? = nil,
+        intoSlot: IORing.RegisteredFile,
+        context: UInt64 = 0
+    )
+    case pollAdd(
+        file: FileDescriptor,
+        events: IORing.Request.PollEvents,
+        isMultiShot: Bool = false,
+        context: UInt64 = 0
+    )
+    case read(
+        file: FileDescriptor,
+        buffer: IORing.RegisteredBuffer,
+        offset: UInt64 = 0,
+        context: UInt64 = 0
+    )
+    case readUnregistered(
+        file: FileDescriptor,
+        buffer: UnsafeMutableRawBufferPointer,
+        offset: UInt64 = 0,
+        context: UInt64 = 0
+    )
+    case readSlot(
+        file: IORing.RegisteredFile,
+        buffer: IORing.RegisteredBuffer,
+        offset: UInt64 = 0,
+        context: UInt64 = 0
+    )
+    case readUnregisteredSlot(
+        file: IORing.RegisteredFile,
+        buffer: UnsafeMutableRawBufferPointer,
+        offset: UInt64 = 0,
+        context: UInt64 = 0
+    )
+    case write(
+        file: FileDescriptor,
+        buffer: IORing.RegisteredBuffer,
+        offset: UInt64 = 0,
+        context: UInt64 = 0
+    )
+    case writeUnregistered(
+        file: FileDescriptor,
+        buffer: UnsafeMutableRawBufferPointer,
+        offset: UInt64 = 0,
+        context: UInt64 = 0
+    )
+    case writeSlot(
+        file: IORing.RegisteredFile,
+        buffer: IORing.RegisteredBuffer,
+        offset: UInt64 = 0,
+        context: UInt64 = 0
+    )
+    case writeUnregisteredSlot(
+        file: IORing.RegisteredFile,
+        buffer: UnsafeMutableRawBufferPointer,
+        offset: UInt64 = 0,
+        context: UInt64 = 0
+    )
+    case close(
+        FileDescriptor,
+        context: UInt64 = 0
+    )
+    case closeSlot(
+        IORing.RegisteredFile,
+        context: UInt64 = 0
+    )
+    case unlinkAt(
+        atDirectory: FileDescriptor,
+        path: FilePath,
+        context: UInt64 = 0
+    )
+    case cancel(
+        flags:UInt32
+    )
+    case cancelContext(
+        flags: UInt32,
+        targetContext: UInt64
+    )
+    case cancelFD(
+        flags: UInt32,
+        targetFD: FileDescriptor
+    )
+    case cancelFDSlot(
+        flags: UInt32,
+        target: IORing.RegisteredFile
+    )
+
+}
+
+@inline(__always) @inlinable
+internal func makeRawRequest_readWrite_registered(
+    file: FileDescriptor,
+    buffer: IORing.RegisteredBuffer,
+    offset: UInt64,
+    context: UInt64 = 0,
+    request: consuming RawIORequest
+) -> RawIORequest {
+    request.fileDescriptor = file
+    request.buffer = buffer.unsafeBuffer
+    request.rawValue.buf_index = UInt16(exactly: buffer.index)!
+    request.offset = offset
+    request.rawValue.user_data = context
+    return request
+}
+
+@inline(__always) @inlinable
+internal func makeRawRequest_readWrite_registered_slot(
+    file: IORing.RegisteredFile,
+    buffer: IORing.RegisteredBuffer,
+    offset: UInt64,
+    context: UInt64 = 0,
+    request: consuming RawIORequest
+) -> RawIORequest {
+    request.rawValue.fd = Int32(exactly: file.index)!
+    request.flags = .fixedFile
+    request.buffer = buffer.unsafeBuffer
+    request.rawValue.buf_index = UInt16(exactly: buffer.index)!
+    request.offset = offset
+    request.rawValue.user_data = context
+    return request
+}
+
+@inline(__always) @inlinable
+internal func makeRawRequest_readWrite_unregistered(
+    file: FileDescriptor,
+    buffer: UnsafeMutableRawBufferPointer,
+    offset: UInt64,
+    context: UInt64 = 0,
+    request: consuming RawIORequest
+) -> RawIORequest {
+    request.fileDescriptor = file
+    request.buffer = buffer
+    request.offset = offset
+    request.rawValue.user_data = context
+    return request
+}
+
+@inline(__always) @inlinable
+internal func makeRawRequest_readWrite_unregistered_slot(
+    file: IORing.RegisteredFile,
+    buffer: UnsafeMutableRawBufferPointer,
+    offset: UInt64,
+    context: UInt64 = 0,
+    request: consuming RawIORequest
+) -> RawIORequest {
+    request.rawValue.fd = Int32(exactly: file.index)!
+    request.flags = .fixedFile
+    request.buffer = buffer
+    request.offset = offset
+    request.rawValue.user_data = context
+    return request
+}
+
+extension IORing {
+    public struct Request {
+        @usableFromInline var core: IORequestCore
+
+        @inlinable internal init(core inCore: IORequestCore) {
+            core = inCore
+        }
+
+        @inlinable internal consuming func extractCore() -> IORequestCore {
+            return core
+        }
+    }
+}
+
+
+
+extension IORing.Request {
+    @inlinable public static func nop(context: UInt64 = 0) -> IORing.Request {
+        .init(core: .nop)
+    }
+
+    // Poll
+
+    /// Multishot poll: the poll handler continues to report CQEs on behalf
+    /// of the same SQE, each flagged with
+    /// ``IORing/Completion/Flags/moreCompletions``.
+    ///
+    /// Corresponds to `IORING_POLL_ADD_MULTI`. Note that since
+    /// `sqe->poll_events` is the event space, the command flags for
+    /// `POLL_ADD` are stored in `sqe->len`.
+    @_alwaysEmitIntoClient
+    internal static var SWIFT_IORING_POLL_ADD_MULTI: UInt32 { 1 << 0 }
+
+    /// Adds a poll operation to monitor a file descriptor for specific I/O
+    /// events.
+    ///
+    /// This method creates an `io_uring` poll operation that monitors the
+    /// specified file descriptor for I/O readiness events. The operation
+    /// completes when any of the requested events occur on the file
+    /// descriptor, such as data becoming available for reading or the
+    /// descriptor becoming ready for writing.
+    ///
+    /// Poll operations are useful for implementing efficient I/O
+    /// multiplexing, allowing you to monitor multiple file descriptors
+    /// concurrently within a single `io_uring` instance. When used with
+    /// multishot mode, a single poll operation can deliver multiple
+    /// completion events without needing to be resubmitted.
+    ///
+    /// Poll requests on a ring created with
+    /// ``IORing/SetupFlags/pollCompletions`` fail with
+    /// ``Errno/invalidArgument``.
+    ///
+    /// ## Multishot Behavior
+    ///
+    /// When `isMultiShot` is `true`, the poll operation automatically rearms
+    /// after each completion event, continuing to monitor the file descriptor
+    /// for subsequent events. This reduces submission overhead for long-lived
+    /// monitoring operations. The poll stays armed until it's canceled or the
+    /// kernel ends it; its last completion is the one without
+    /// ``IORing/Completion/Flags/moreCompletions``. Neither a hangup nor
+    /// closing the descriptor ends the poll, and the request keeps the file
+    /// open until the poll ends.
+    ///
+    /// When `isMultiShot` is `false`, the poll operation completes once after
+    /// the first matching event occurs, requiring resubmission to continue
+    /// monitoring.
+    ///
+    /// ## Example Usage
+    ///
+    /// ```swift
+    /// // Monitor a socket for incoming connections
+    /// var ring = try IORing(queueDepth: 32)
+    /// let pollRequest = IORing.Request.pollAdd(
+    ///     listenSocket,
+    ///     events: .readable,
+    ///     isMultiShot: true,
+    ///     context: 1
+    /// )
+    /// guard try ring.submit(linkedRequests: pollRequest) else {
+    ///     // The submission queue was full; retry or drain completions first.
+    ///     return
+    /// }
+    ///
+    /// // Process completions. A multishot poll stays armed while its
+    /// // completions contain `.moreCompletions`.
+    /// var armed = true
+    /// while armed {
+    ///     let completion = try ring.blockingConsumeCompletion()
+    ///     guard completion.context == 1 else {
+    ///         // Handle completions for other requests.
+    ///         continue
+    ///     }
+    ///     armed = completion.flags.contains(.moreCompletions)
+    ///     if let error = completion.error {
+    ///         // The poll ended with an error, such as `.canceled`.
+    ///         throw error
+    ///     }
+    ///     // Handle incoming connection
+    /// }
+    /// ```
+    ///
+    /// If the poll ends with an error, such as ``Errno/canceled``, its last
+    /// completion carries that error in ``IORing/Completion/error`` and
+    /// doesn't contain `.moreCompletions`.
+    ///
+    /// - Parameters:
+    ///   - file: The file descriptor to monitor for I/O events.
+    ///   - events: The I/O events to monitor on the file descriptor.
+    ///   - isMultiShot: If `true`, the poll operation automatically rearms
+    ///     after each event, continuing to monitor the file descriptor. If
+    ///     `false`, the operation completes after the first matching event.
+    ///     Defaults to `false`.
+    ///   - context: An application-specific value passed through to the
+    ///     completion event, allowing you to identify which operation
+    ///     completed. Defaults to `0`.
+    ///
+    /// - Returns: An I/O ring request that monitors the file descriptor for
+    ///   the specified events.
+    ///
+    /// ## See Also
+    ///
+    /// - ``PollEvents``: The events that can be monitored.
+    /// - ``IORing/Request/cancel(_:matching:)-(_,FileDescriptor)``:
+    ///   Canceling poll operations.
+    @inlinable public static func pollAdd(
+        _ file: FileDescriptor,
+        events: PollEvents,
+        isMultiShot: Bool = false,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .pollAdd(file: file, events: events, isMultiShot: isMultiShot, context: context))
+    }
+    
+    @inlinable public static func read(
+        _ file: IORing.RegisteredFile,
+        into buffer: IORing.RegisteredBuffer,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .readSlot(file: file, buffer: buffer, offset: offset, context: context))
+    }
+
+    @inlinable public static func read(
+        _ file: FileDescriptor,
+        into buffer: IORing.RegisteredBuffer,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .read(file: file, buffer: buffer, offset: offset, context: context))
+    }
+
+    @inlinable public static func read(
+        _ file: IORing.RegisteredFile,
+        into buffer: UnsafeMutableRawBufferPointer,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .readUnregisteredSlot(file: file, buffer: buffer, offset: offset, context: context))
+    }
+
+    @inlinable public static func read(
+        _ file: FileDescriptor,
+        into buffer: UnsafeMutableRawBufferPointer,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .readUnregistered(file: file, buffer: buffer, offset: offset, context: context))
+    }
+
+    @inlinable public static func write(
+        _ buffer: IORing.RegisteredBuffer,
+        into file: IORing.RegisteredFile,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .writeSlot(file: file, buffer: buffer, offset: offset, context: context))
+    }
+
+    @inlinable public static func write(
+        _ buffer: IORing.RegisteredBuffer,
+        into file: FileDescriptor,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .write(file: file, buffer: buffer, offset: offset, context: context))
+    }
+
+    @available(*, deprecated, message: "Use the overload accepting UnsafeRawBufferPointer instead.")
+    @_disfavoredOverload
+    @inlinable public static func write(
+        _ buffer: UnsafeMutableRawBufferPointer,
+        into file: IORing.RegisteredFile,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .writeUnregisteredSlot(
+                file: file, buffer: buffer, offset: offset, context: context))
+    }
+
+    @available(*, deprecated, message: "Use the overload accepting UnsafeRawBufferPointer instead.")
+    @_disfavoredOverload
+    @inlinable public static func write(
+        _ buffer: UnsafeMutableRawBufferPointer,
+        into file: FileDescriptor,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(
+            core: .writeUnregistered(file: file, buffer: buffer, offset: offset, context: context)
+        )
+    }
+
+    /// Creates a request to write an unregistered buffer to a registered file.
+    ///
+    /// The request does not copy the buffer's contents. Keep its storage alive
+    /// and unchanged until the operation completes. The write only reads from
+    /// the buffer; it does not modify its contents.
+    ///
+    /// - Parameters:
+    ///   - buffer: The bytes to write.
+    ///   - file: The registered file to write to.
+    ///   - offset: The byte offset in the file at which to begin writing.
+    ///     Ignored for non-seekable files. Defaults to `0`.
+    ///   - context: An application-specific value passed through to the
+    ///     completion event. Defaults to `0`.
+    /// - Returns: An I/O ring write request. A successful completion's result
+    ///   is the number of bytes written, which may be less than the buffer's count.
+    @inlinable public static func write(
+        _ buffer: UnsafeRawBufferPointer,
+        into file: IORing.RegisteredFile,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        // The shared request encoder uses a mutable pointer, but writes only read the buffer.
+        .init(core: .writeUnregisteredSlot(
+            file: file, buffer: UnsafeMutableRawBufferPointer(mutating: buffer), offset: offset, context: context
+        ))
+    }
+
+    /// Creates a request to write an unregistered buffer to a file descriptor.
+    ///
+    /// The request does not copy the buffer's contents. Keep its storage alive
+    /// and unchanged until the operation completes. The write only reads from
+    /// the buffer; it does not modify its contents.
+    ///
+    /// - Parameters:
+    ///   - buffer: The bytes to write.
+    ///   - file: The file descriptor to write to.
+    ///   - offset: The byte offset in the file at which to begin writing.
+    ///     Ignored for non-seekable files. Defaults to `0`.
+    ///   - context: An application-specific value passed through to the
+    ///     completion event. Defaults to `0`.
+    /// - Returns: An I/O ring write request. A successful completion's result
+    ///   is the number of bytes written, which may be less than the buffer's count.
+    @inlinable public static func write(
+        _ buffer: UnsafeRawBufferPointer,
+        into file: FileDescriptor,
+        at offset: UInt64 = 0,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        // The shared request encoder uses a mutable pointer, but writes only read the buffer.
+        .init(core: .writeUnregistered(
+            file: file, buffer: UnsafeMutableRawBufferPointer(mutating: buffer), offset: offset, context: context
+        ))
+    }
+
+    @inlinable public static func close(
+        _ file: FileDescriptor,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .close(file, context: context))
+    }
+
+    @inlinable public static func close(
+        _ file: IORing.RegisteredFile,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .closeSlot(file, context: context))
+    }
+
+    @inlinable public static func open(
+        _ path: FilePath,
+        in directory: FileDescriptor,
+        into slot: IORing.RegisteredFile,
+        mode: FileDescriptor.AccessMode,
+        options: FileDescriptor.OpenOptions = FileDescriptor.OpenOptions(),
+        permissions: FilePermissions? = nil,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(
+            core: .openatSlot(
+                atDirectory: directory, path: path, mode, options: options,
+                permissions: permissions, intoSlot: slot, context: context))
+    }
+
+    @inlinable public static func open(
+        _ path: FilePath,
+        in directory: FileDescriptor,
+        mode: FileDescriptor.AccessMode,
+        options: FileDescriptor.OpenOptions = FileDescriptor.OpenOptions(),
+        permissions: FilePermissions? = nil,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(
+            core: .openat(
+                atDirectory: directory, path: path, mode, options: options,
+                permissions: permissions, context: context
+            ))
+    }
+
+    @inlinable public static func unlink(
+        _ path: FilePath,
+        in directory: FileDescriptor,
+        context: UInt64 = 0
+    ) -> IORing.Request {
+        .init(core: .unlinkAt(atDirectory: directory, path: path, context: context))
+    }
+
+    // Cancel
+
+    /// Cancel every request matching the given key.
+    ///
+    /// Corresponds to `IORING_ASYNC_CANCEL_ALL`.
+    @_alwaysEmitIntoClient
+    internal static var SWIFT_IORING_ASYNC_CANCEL_ALL: UInt32 { 1 << 0 }
+
+    /// Cancel any request matching the given file descriptor.
+    ///
+    /// Corresponds to `IORING_ASYNC_CANCEL_FD`. Cannot be combined with
+    /// ``SWIFT_IORING_ASYNC_CANCEL_ANY``.
+    @_alwaysEmitIntoClient
+    internal static var SWIFT_IORING_ASYNC_CANCEL_FD: UInt32 { 1 << 1 }
+
+    /// Cancel any matching request, disregarding every other key.
+    ///
+    /// Corresponds to `IORING_ASYNC_CANCEL_ANY`. Cannot be combined with
+    /// ``SWIFT_IORING_ASYNC_CANCEL_FD`` or ``SWIFT_IORING_ASYNC_CANCEL_OP``.
+    @_alwaysEmitIntoClient
+    internal static var SWIFT_IORING_ASYNC_CANCEL_ANY: UInt32 { 1 << 2 }
+
+    /// Cancel any request matching a registered file.
+    ///
+    /// Corresponds to `IORING_ASYNC_CANCEL_FD_FIXED`, and accompanies
+    /// ``SWIFT_IORING_ASYNC_CANCEL_FD``.
+    @_alwaysEmitIntoClient
+    internal static var SWIFT_IORING_ASYNC_CANCEL_FD_FIXED: UInt32 { 1 << 3 }
+
+    /// Cancel requests matching the `user_data`. This is the default when no other
+    /// key is given.
+    ///
+    /// Corresponds to `IORING_ASYNC_CANCEL_USERDATA`.
+    @_alwaysEmitIntoClient
+    internal static var SWIFT_IORING_ASYNC_CANCEL_USERDATA: UInt32 { 1 << 4 }
+
+    /// Cancel requests matching the operation.
+    ///
+    /// Corresponds to `IORING_ASYNC_CANCEL_OP`. Cannot be combined with
+    /// ``SWIFT_IORING_ASYNC_CANCEL_ANY``.
+    @_alwaysEmitIntoClient
+    internal static var SWIFT_IORING_ASYNC_CANCEL_OP: UInt32 { 1 << 5 }
+
+    public enum CancellationMatch {
+    	case all
+    	case first
+    }
+    
+    @inlinable public static func cancel(
+    	_ matchAll: CancellationMatch,
+    	matchingContext: UInt64
+    ) -> IORing.Request {
+        switch matchAll {
+            case .all:
+                .init(core: .cancelContext(flags: SWIFT_IORING_ASYNC_CANCEL_ALL | SWIFT_IORING_ASYNC_CANCEL_USERDATA, targetContext: matchingContext))
+            case .first:
+                .init(core: .cancelContext(flags: SWIFT_IORING_ASYNC_CANCEL_USERDATA, targetContext: matchingContext))
+        }
+    }
+    
+    @inlinable public static func cancel(
+    	_ matchAll: CancellationMatch,
+    	matching: FileDescriptor
+    ) -> IORing.Request {
+        switch matchAll {
+            case .all:
+                .init(core: .cancelFD(flags: SWIFT_IORING_ASYNC_CANCEL_ALL | SWIFT_IORING_ASYNC_CANCEL_FD, targetFD: matching))
+            case .first:
+                .init(core: .cancelFD(flags: SWIFT_IORING_ASYNC_CANCEL_FD, targetFD: matching))
+        }
+    }
+    
+    @inlinable public static func cancel(
+    	_ matchAll: CancellationMatch,
+    	matching: IORing.RegisteredFile
+    ) -> IORing.Request {
+        switch matchAll {
+            case .all:
+                .init(core: .cancelFDSlot(flags: SWIFT_IORING_ASYNC_CANCEL_ALL | SWIFT_IORING_ASYNC_CANCEL_FD_FIXED, target: matching))
+            case .first:
+                .init(core: .cancelFDSlot(flags: SWIFT_IORING_ASYNC_CANCEL_FD_FIXED, target: matching))
+        }
+    }
+
+    @inlinable public static func cancel(
+    	_ matchAll: CancellationMatch,
+    ) -> IORing.Request {
+        switch matchAll {
+            case .all:
+                .init(core: .cancel(flags: SWIFT_IORING_ASYNC_CANCEL_ALL))
+            case .first:
+                .init(core: .cancel(flags: SWIFT_IORING_ASYNC_CANCEL_ANY))
+        }
+    }
+
+    @inline(__always) @inlinable
+    internal consuming func makeRawRequest(
+        pathBuffers: PendingPathBuffers
+    ) -> RawIORequest {
+        var request = RawIORequest()
+        switch extractCore() {
+        case .nop:
+            request.operation = .nop
+        case .openatSlot(
+            let atDirectory, let path, let mode, let options, let permissions, let fileSlot,
+            let context):
+            // TODO: use rawValue less
+            request.operation = .openAt
+            request.fileDescriptor = atDirectory
+            request.rawValue.addr = UInt64(
+                UInt(bitPattern: pathBuffers.pin(path)))
+            request.rawValue.open_flags = UInt32(bitPattern: options.rawValue | mode.rawValue)
+            request.rawValue.len = permissions?.rawValue ?? 0
+            request.rawValue.file_index = UInt32(fileSlot.index + 1)
+            request.rawValue.user_data = context
+        case .openat(
+            let atDirectory, let path, let mode, let options, let permissions, let context):
+            request.operation = .openAt
+            request.fileDescriptor = atDirectory
+            request.rawValue.addr = UInt64(
+                UInt(bitPattern: pathBuffers.pin(path)))
+            request.rawValue.open_flags = UInt32(bitPattern: options.rawValue | mode.rawValue)
+            request.rawValue.len = permissions?.rawValue ?? 0
+            request.rawValue.user_data = context
+        case .write(let file, let buffer, let offset, let context):
+            request.operation = .writeFixed
+            return makeRawRequest_readWrite_registered(
+                file: file, buffer: buffer, offset: offset, context: context, request: request)
+        case .writeSlot(let file, let buffer, let offset, let context):
+            request.operation = .writeFixed
+            return makeRawRequest_readWrite_registered_slot(
+                file: file, buffer: buffer, offset: offset, context: context, request: request)
+        case .writeUnregistered(let file, let buffer, let offset, let context):
+            request.operation = .write
+            return makeRawRequest_readWrite_unregistered(
+                file: file, buffer: buffer, offset: offset, context: context, request: request)
+        case .writeUnregisteredSlot(let file, let buffer, let offset, let context):
+            request.operation = .write
+            return makeRawRequest_readWrite_unregistered_slot(
+                file: file, buffer: buffer, offset: offset, context: context, request: request)
+        case .read(let file, let buffer, let offset, let context):
+            request.operation = .readFixed
+            return makeRawRequest_readWrite_registered(
+                file: file, buffer: buffer, offset: offset, context: context, request: request)
+        case .readSlot(let file, let buffer, let offset, let context):
+            request.operation = .readFixed
+            return makeRawRequest_readWrite_registered_slot(
+                file: file, buffer: buffer, offset: offset, context: context, request: request)
+        case .readUnregistered(let file, let buffer, let offset, let context):
+            request.operation = .read
+            return makeRawRequest_readWrite_unregistered(
+                file: file, buffer: buffer, offset: offset, context: context, request: request)
+        case .readUnregisteredSlot(let file, let buffer, let offset, let context):
+            request.operation = .read
+            return makeRawRequest_readWrite_unregistered_slot(
+                file: file, buffer: buffer, offset: offset, context: context, request: request)
+        case .close(let file, let context):
+            request.operation = .close
+            request.fileDescriptor = file
+            request.rawValue.user_data = context
+        case .closeSlot(let file, let context):
+            request.operation = .close
+            request.rawValue.file_index = UInt32(file.index + 1)
+            request.rawValue.user_data = context
+        case .unlinkAt(let atDirectory, let path, let context):
+            request.operation = .unlinkAt
+            request.fileDescriptor = atDirectory
+            request.rawValue.addr = UInt64(
+                UInt(bitPattern: pathBuffers.pin(path)))
+            request.rawValue.user_data = context
+        case .cancelContext(let flags, let targetContext):
+            request.operation = .asyncCancel
+            request.cancel_flags = flags
+            request.addr = targetContext
+        case .cancelFD(let flags, let targetFD):
+            request.operation = .asyncCancel
+            request.cancel_flags = flags
+            request.fileDescriptor = targetFD
+        case .cancelFDSlot(let flags, let target):
+            request.operation = .asyncCancel
+            request.cancel_flags = flags
+            request.rawValue.fd = Int32(target.index)
+        case .cancel(let flags):
+            request.operation = .asyncCancel
+            request.cancel_flags = flags
+        case .pollAdd(let file, let events, let isMultiShot, let context):
+            request.operation = .pollAdd
+            request.fileDescriptor = file
+            request.rawValue.user_data = context
+            if isMultiShot {
+                request.rawValue.len = Self.SWIFT_IORING_POLL_ADD_MULTI
+            }
+            request.pollEvents = events
+        }
+
+        return request
+    }
+}
+#endif // os(Linux)
+#endif // compiler(>=6.2) && $Lifetimes

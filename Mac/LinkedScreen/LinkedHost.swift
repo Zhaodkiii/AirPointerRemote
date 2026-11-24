@@ -105,6 +105,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private var activity: NSObjectProtocol?
     private let mouse = PhoneMouse()
     private let focus = LinkedFocus()
+    private let focusLog = Logger(subsystem: "com.daokaihua.airpointerremote", category: "LinkedFocus")
     private var pendingKeyboardClick: UUID?
     private var leftPress: (point: CGPoint, time: TimeInterval)?
     private var lastFocus: UUID?
@@ -1404,6 +1405,16 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         }
     }
 
+    private func replyToFocusQuery(_ query: UUID) {
+        publishFocus()
+        var reply = LinkedMessage(.focus, token: focus.token)
+        reply.composerVersion = 1
+        reply.focusQuery = query
+        reply.sandboxedReceiver = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+        focusLog.info("Focus query reply: editable=\(reply.token != nil)")
+        channel?.send(reply)
+    }
+
     private func handle(_ message: LinkedMessage) {
         guard !ended else { return }
         if message.kind == .stop { stop(); return }
@@ -1418,14 +1429,24 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
             #if CLOSED_LID_DESKTOP
             if let size = message.adaptiveSize { requestAdaptiveSize(size) }
             #endif
-            if let query = message.focusQuery, !viewingOnly, acceptsLinkedInput, backgroundDeadline == nil, hasPicture {
-                focus.prepareForClick()
-                focus.refresh()
-                var reply = LinkedMessage(.focus, token: focus.token)
-                reply.composerVersion = 1
-                reply.focusQuery = query
-                reply.sandboxedReceiver = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
-                channel?.send(reply)
+            if let query = message.focusQuery {
+                if !viewingOnly, acceptsLinkedInput, backgroundDeadline == nil, hasPicture {
+                    focus.prepareForClick()
+                    focus.refresh()
+                    if focus.token != nil {
+                        replyToFocusQuery(query)
+                    } else {
+                        // Chromium may expose the focused field shortly after AX is enabled.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) { [weak self] in
+                            guard let self, !self.ended, !self.viewingOnly, self.acceptsLinkedInput,
+                                  self.backgroundDeadline == nil, self.hasPicture else { return }
+                            self.focus.refresh()
+                            self.replyToFocusQuery(query)
+                        }
+                    }
+                } else {
+                    focusLog.info("Focus query skipped: viewingOnly=\(self.viewingOnly) acceptsInput=\(self.acceptsLinkedInput) background=\(self.backgroundDeadline != nil) hasPicture=\(self.hasPicture)")
+                }
             }
             if message.supportsVideoLane == true { supportsSplit = true }
             lastHeartbeat = Date()
