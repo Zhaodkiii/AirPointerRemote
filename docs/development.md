@@ -1,71 +1,71 @@
-# 构建、使用与发布
+# Build, Use, and Release
 
-打开 `GlideCueRemote.xcodeproj`，在 Xcode 中选择下面的 Scheme：
+Open `GlideCueRemote.xcodeproj` in Xcode and select a scheme.
 
-| Scheme | 最低系统 | Bundle ID |
+| Scheme | Minimum OS | Bundle ID |
 | --- | --- | --- |
 | GlideCue Remote iPhone | iOS 18 | `cn.zhaodk.glidecue` |
 | GlideCue Remote Watch | watchOS 11 | `cn.zhaodk.glidecue.watchkitapp` |
 | GlideCue Remote Mac | macOS 14 | `cn.zhaodk.glidecue` |
 | GlideCue Remote Mac Direct | macOS 14 | `cn.zhaodk.glidecue.direct` |
 
-先运行 Mac 接收端，允许蓝牙访问，并在「系统设置 → 隐私与安全性 → 辅助功能」中为新 App 授权。然后在 iPhone 或手表上选择 Mac 并完成配对。新 Bundle ID 对应新的 App 安装和权限记录，首次使用需要重新配对。Mac 菜单栏可以暂停、撤销手机配对或退出。紧急停止快捷键为 Control + Option + Command + 句号。
+Open the Mac receiver, allow Bluetooth access, and enable the app under **System Settings → Privacy & Security → Accessibility**. Select the Mac on your iPhone or Apple Watch to pair. A different bundle ID requires fresh permissions and pairing. Use the Mac menu bar to pause control, revoke iPhone pairings, or quit. Press Control + Option + Command + Period for an emergency stop.
 
-Mac 的 Debug 配置沿用开发版的鼠标控制方式。Release 配置启用了 App Sandbox 和蓝牙设备权限，用于验证 Mac App Store 分发版。发布前要用带签名的 Release 构建在真机上检查蓝牙发现、配对、全系统移动、点击、拖动和滚动。在 Xcode 的 Mac Scheme 中把 Run 的 Build Configuration 切到 Release 就能测试这份配置。
+The Mac Debug configuration uses the development pointer-control setup. Release enables App Sandbox and Bluetooth access for Mac App Store distribution. Verify Bluetooth discovery, pairing, pointer movement, clicking, dragging, and scrolling on a physical Mac with a signed Release build. To run that configuration in Xcode, set **Run → Build Configuration** to **Release** in the Mac scheme.
 
-## iPhone 直连系统屏幕共享
+## Screen Sharing from iPhone
 
-在 iPhone 首页选择「内置屏幕共享」，可通过局域网发现或输入 VNC 地址连接 Mac。使用方法、两种认证、构建与真机验收见[系统远程桌面](system-desktop.md)。
+Open **Built-in Screen Sharing** on iPhone to discover your Mac on the local network or connect by VNC address. See the [Screen Sharing Guide](system-desktop.md) for setup, sign-in methods, and device testing.
 
-## 项目目录
+## Repository Layout
 
-| 目录 | 内容 |
+| Directory | Contents |
 | --- | --- |
-| `iPhone/` | `App` 应用入口和首页、`Connection` 配对和连接、`Remote` 指针控制、`LinkedScreen` 屏幕共享、`Setup` 安装引导 |
-| `Mac/` | `App` 接收端入口、`Connection` 设备连接、`Input` 指针和显示器坐标、`Interface` 菜单栏和浮层、`LinkedScreen` 屏幕采集和编码 |
-| `Watch/` | `Sources` 手表遥控界面和连接逻辑 |
-| `Shared/` | iPhone 与 Mac 共用的配对协议和屏幕共享传输 |
-| 各平台的 `Resources/` | 图标、隐私清单和本地化。iPhone 额外包含安装动画和脚本生成的 Mac 安装包 |
-| `Config/` | Xcode 使用的 Info.plist 配置 |
-| `Tests/`、`scripts/` | 协议与图传检查、Mac 安装包构建 |
-| `docs/`、`Game/` | 项目文档与演示素材、独立网页游戏 |
+| `iPhone/` | App entry point, pairing, pointer control, screen sharing, and setup guide |
+| `Mac/` | Receiver, device connections, pointer input, menu bar, screen capture, and video encoding |
+| `Watch/` | Apple Watch controls and connection logic |
+| `Shared/` | Pairing protocol and screen-sharing transport |
+| Platform `Resources/` directories | Icons, privacy manifests, and localization. iPhone also includes setup videos and the generated Mac installer. |
+| `Config/` | Info.plist files used by Xcode |
+| `Tests/`, `scripts/` | Protocol and streaming checks, and Mac installer packaging |
+| `docs/`, `Game/` | Documentation, demos, and a standalone browser game |
 
-## App Store 分发
+## App Store Distribution
 
-1. 在 Apple Developer 注册 `cn.zhaodk.glidecue`，并在 App Store Connect 创建以英语（美国）为主语言的 iOS 记录。
-2. 用 GlideCue Remote iPhone Scheme 选择通用 iOS 设备并归档。此 Scheme 的安装包仅包含 iPhone App。
-3. 用 Xcode Organizer 验证并上传签名归档。在 TestFlight 验证后填写商店截图、隐私和支持信息、加密申报及配对说明。
+1. Register `cn.zhaodk.glidecue` with Apple Developer and create an iOS app record in App Store Connect with English (U.S.) as the primary language.
+2. Archive with the **GlideCue Remote iPhone** scheme and a generic iOS device destination. This archive contains the iPhone app only.
+3. Validate and upload the signed archive from Xcode Organizer. Verify the build in TestFlight, then provide screenshots, privacy and support information, export compliance details, and pairing instructions.
 
-## 合盖桌面
+## Closed-Lid Desktop
 
-从「应用程序」打开 **GlideCue Remote Direct**。首次打开会显示 **Closed-Lid Desktop** 设置，之后可从 Mac 菜单栏重新打开。保持机盖打开，打开功能开关，允许屏幕录制与鼠标控制，在 **Closed-Lid Power** 项点击 **Set Up** 并按系统提示允许后台服务。直装版使用独立 Bundle ID，首次配对需要重新确认。
+Open **GlideCue Remote Direct** from Applications. **Closed-Lid Desktop** opens on first launch and is available from the Mac menu bar afterward. With the lid open, enable the feature, grant Screen Recording and Accessibility access, and click **Set Up** under **Closed-Lid Power**. Follow the prompts to allow the background service. The Direct edition uses its own bundle ID and requires a new pairing.
 
-在已配对的 iPhone 上点首页 **Share** 或 **Linked Screen → Start Sharing**。看到 Lid Desktop 和「可以合上 Mac 屏幕了」后再合盖。开盖会恢复内屏亮度，手机继续显示原来的虚拟桌面。想显示内屏时，可在手机的 Linked Screen 选择 **Choose a Display on the Mac**。退出共享后，Mac 恢复原睡眠设置。
+On your paired iPhone, tap **Share** or **Linked Screen → Start Sharing**. Wait for **Lid Desktop** and **Ready to close the Mac lid** before closing the lid. Opening the lid restores the built-in display brightness while sharing continues on the virtual desktop. To switch to the built-in display, tap **Choose a Display on the Mac**. Ending the session restores the original Mac sleep settings.
 
-此前安装过普通接收端或独立的 Lid Desktop 工具时，先从菜单栏结束这些程序，再打开直装版。移除直装版前，可在合盖桌面设置中结束共享并点 **Remove Power Helper**。首次授权、实际合盖、低电量与崩溃恢复需要用真机确认。内屏亮度与虚拟显示器使用 macOS 私有接口，升级 macOS 后要重新验证。
+Quit the standard receiver and any standalone Lid Desktop utility before opening the Direct edition. Before uninstalling the Direct edition, end the session and click **Remove Power Helper**. Verify first-run permissions, lid closure, low battery, and crash recovery on a physical Mac. The virtual display and brightness controls use private macOS APIs, so retest them after macOS upgrades.
 
-## 官网 Mac 安装包
+## Mac Installer
 
-在项目目录运行：
+From the repository root, run the packaging script.
 
 ```bash
 ./scripts/build-mac-dmg.sh
 ```
 
-脚本从当前源码构建标准版 Mac Release 并更新 iPhone 内置安装包。直接执行 `./scripts/dmg-layout.py` 也会调用同一打包流程。脚本打包 Apple silicon 和 Intel 两种架构，并使用团队 `4AN6PV98G7` 的 Developer ID Application 签名。需要 Xcode 和 Python 3。首次运行会通过 PyPI 将 dmgbuild 安装到项目的本地构建目录。默认使用 Xcode 已登录的团队账号公证包内 App，安装镜像输出到 `DerivedData/WebsiteRelease/`，文件名带有 `-app-notarized`。
+The default command builds the standard Mac Release and refreshes the installer bundled with iPhone. Running `./scripts/dmg-layout.py` directly invokes the same workflow. The script builds for Apple silicon and Intel and signs with a Developer ID Application certificate from team `4AN6PV98G7`. It requires Xcode and Python 3 and installs dmgbuild into a local build directory on first run. By default, it uses the team account signed in to Xcode to notarize the app inside the DMG. The resulting image appears in `DerivedData/WebsiteRelease/` with an `-app-notarized` suffix.
 
-官网发布时，使用团队已配置的 notarytool 钥匙串凭据为最终 DMG 公证：
+To notarize the Direct edition DMG for website distribution, run the script with a configured notarytool Keychain profile.
 
 ```bash
 AIRPOINTER_NOTARY_PROFILE=AirPointerNotary ./scripts/build-mac-dmg.sh --direct
 ```
 
-`AirPointerNotary` 是示例名称。首次可运行 `xcrun notarytool store-credentials AirPointerNotary`，按交互提示配置团队认证。脚本会验证 DMG 的公证票据和包内 App 的签名，并输出带版本号和构建号的安装包路径。用户打开 DMG，将 GlideCue Remote 拖入 Applications，再从 Applications 打开，菜单栏会显示接收端图标。
+`AirPointerNotary` is an example profile name. Run `xcrun notarytool store-credentials AirPointerNotary` to configure a profile. The script verifies the DMG’s notarization ticket and the app’s signature, then prints the installer path with its version and build number. Open the DMG, drag GlideCue Remote into Applications, and launch it to see the receiver in the menu bar.
 
-运行 `./scripts/build-mac-dmg.sh --standard` 可构建普通 Mac 版并更新 `iPhone/Resources/GlideCue Remote for Mac.dmg`。随后重新构建 iPhone App，用户可在 **Choose Your Mac → Set Up Your Mac → Share Mac Installer** 找到普通版安装包。使用 `--direct` 生成官网直装版独立的 `-Direct` DMG。
+Use `--standard` to explicitly build the standard edition and update `iPhone/Resources/GlideCue Remote for Mac.dmg`. After rebuilding the iPhone app, users can find the installer under **Choose Your Mac → Set Up Your Mac → Share Mac Installer**. Use `--direct` to build the separate `-Direct` DMG.
 
-## 开发检查
+## Development Checks
 
-运行 `Tests/run-phone-checks.sh` 检查配对协议、姿态换算和鼠标事件生成。系统级鼠标控制需要在物理 Mac 上验证。
+Run `Tests/run-phone-checks.sh` to check pairing, motion conversion, and mouse event generation. Verify system-wide pointer control on a physical Mac.
 
-首发验收、Apple 审核风险与英文审核备注见 [发布检查](release-readiness.md)。
+See the [release checklist](release-readiness.md) for first-release checks, App Review considerations, and reviewer notes.

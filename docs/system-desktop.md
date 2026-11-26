@@ -1,35 +1,37 @@
-# iPhone 直连 Mac 屏幕共享
+# Mac Screen Sharing from iPhone
 
-## 使用
+## Mirror Your Mac
 
-1. 在 Mac 的「系统设置 → 通用 → 共享」打开「屏幕共享」，进入详情，设置允许访问的用户。记录系统显示的 VNC 地址。使用账户模式时填写这台 Mac 的用户名和登录密码。使用 VNC 模式时单独开启 VNC 密码选项并设置专用密码。
-2. 让 iPhone 与 Mac 接入同一可信局域网。在 GlideCue Remote 首页选择「内置屏幕共享」，首次打开时允许本地网络访问。
-3. 选择「镜像 Mac 屏幕」，从「局域网发现」选择 Mac，或展开「输入地址连接」。默认端口为 5900，自定义端口可用 mac.local:5901 或 vnc://[IPv6]:5901。
-4. 首次连接选择 Mac 账户或 VNC 密码。认证成功后，设备进入「我的电脑」，登录信息保存到这台 iPhone 的钥匙串。再点同一个连接地址时自动登录。若密码已更改，输入新密码连接即可覆盖旧记录。长按已保存的电脑可以移除地址和登录信息。
-5. 已连接时，底部悬浮工具栏提供键盘、修饰键、方向键、快捷操作和设置。可选择适应、填满、原尺寸或观察模式。横屏能显示更多横向桌面。双指捏合调整放大倍率，放大后双指拖动可移动视口，点「恢复全景」重置。填满会裁切源画面。也可从工具面板截图并分享。点「断开」、锁屏或退到后台会关闭会话。
+1. On your Mac, open **System Settings → General → Sharing**. Turn on **Screen Sharing**, open its settings, and choose which users can connect. Note the displayed VNC address. To sign in with a Mac account, use that Mac’s username and password. To use a dedicated VNC password, enable the VNC password option and set one.
+2. Connect your iPhone and Mac to the same trusted local network. On the GlideCue Remote home screen, open **Built-in Screen Sharing** and grant local network access when prompted.
+3. Select **Mirror Mac Screen** and choose a nearby Mac or enter its address. The default port is 5900. For a different port, use an address such as `mac.local:5901` or `vnc://[IPv6]:5901`.
+4. On the first connection, choose Mac account or VNC password authentication. After sign-in, the Mac appears in the saved list, and its credentials are stored in the iPhone Keychain. Selecting the same address signs in automatically. To update saved credentials, connect with the new password. Touch and hold a saved Mac to remove the address and credentials.
+5. Use the floating toolbar for the keyboard, modifier keys, arrow keys, shortcuts, and settings. Choose fit, fill, actual size, or observe-only mode. Fill crops the display. Rotate to landscape to see more of a wide desktop, pinch to zoom, or drag with two fingers to pan. Reset to the full view from the toolbar. Use the tools panel to capture and share a screenshot. Disconnecting, locking iPhone, or leaving the app ends the session.
 
-## 适配 iPhone 的桌面
+## iPhone Desktop
 
-安装并打开新版 GlideCue Remote Direct，允许蓝牙、屏幕录制和辅助功能。在 Mac 上把要使用的普通窗口放到最前。iPhone 首页选择「内置屏幕共享」后默认进入「适配 iPhone 的桌面」，点附近的 Mac 完成配对，或点「打开适配桌面」。
+Install and open the current version of GlideCue Remote Direct on your Mac, then grant Bluetooth, Screen Recording, and Accessibility access. Bring the window you want to use to the front. On your iPhone, open **Built-in Screen Sharing**, choose **iPhone Desktop**, then select a nearby Mac to pair or tap **Start iPhone Desktop**.
 
-iPhone 发送当前可视区域的宽高。Mac 创建独立的虚拟显示器，将当前窗口移到 iPhone Desktop 并按其可用空间调整大小。断开时尝试恢复窗口原来的位置和大小。转屏会调整同一块显示器的模式，等新的画面准备好后恢复点按。显示器在结束会话后释放。适配桌面需要保持 Mac 唤醒，合盖桌面仍使用独立流程。
+The iPhone sends the size of its viewing area. The Mac creates a separate virtual display, moves the frontmost window onto it, and resizes the window to fit. When you rotate the iPhone, the Mac resizes the same display and restores touch control once the new frame arrives. On disconnect, the receiver attempts to restore the window’s original size and position and releases the display. Keep your Mac awake for this mode. Closed-lid sharing uses a separate setup.
 
-### 适配桌面的触控和工具栏
+### Touch and Toolbar
 
-轻点定位并点击，单指滑动滚动手指下的 Mac 窗口或列表。要拖动 Mac 对象，先打开工具栏的手形开关。双指捏合调整手机上的显示倍率，放大后用双指平移查看其他区域。
+Tap to position the pointer and click. Swipe with one finger to scroll the Mac window or list under your finger. Enable the hand tool to drag Mac items. Pinch to zoom and use two fingers to pan while zoomed in.
 
-悬浮工具栏首次显示在右侧中部，轻点省略号展开，点六点把手折叠。拖动省略号或把手可改变停靠侧和高度；位置会保存在手机上。放大镜菜单内的「工具栏大小」提供三档按钮尺寸。打开键盘时工具栏自动折叠，工具栏按可用空间重新定位。
+The floating toolbar starts midway down the right side. Tap the ellipsis to expand it and the six-dot handle to collapse it. Drag either control to change its side and vertical position. The iPhone saves that position. Open the zoom menu to choose one of three toolbar sizes. The toolbar collapses and repositions when the keyboard appears.
 
-## 客户端实现
+## Standard VNC Client
 
-- DesktopDiscovery 使用 Network.framework 浏览 Bonjour 的 _rfb._tcp。保存发现的服务名和域，重连时由系统重新解析。手动地址保存主机和端口。搜索在本地过滤。
-- DesktopSession 通过 NWConnection 直连系统服务。WKWebView 加载包内 noVNC 1.7.0，负责 RFB 解码、桌面绘制及输入。二进制数据经进程内桥传输，每批至多 64 KiB，等待 WebKit 消费后再读取。运行时无需互联网、WebSocket 代理或 Mac 接收端。
-- 用户选择 Mac 账户时限定 ARD 认证，VNC 密码时限定 VNC challenge-response。凭据仅在成功登录后写入本机钥匙串，按 Bonjour 服务或手动连接地址分别保存。首次连接或更换地址需要输入凭据。普通屏幕共享模式适用于可信网络，产品未实现音频传输或 Apple 高性能屏幕共享协议。
-- 打开系统远程桌面时暂停原蓝牙指针输入。每次建立连接使用新的非持久 WebView。等待连接和认证最多 20 秒，失败后保留登录页以便修正并重试。
-- UI 构建直接使用随包资源。升级依赖或修改前端桥接代码后，在 scripts/vnc-client 运行 npm ci 和 node build.mjs，重新生成 SystemDesktop.html 和许可证。认证类型过滤用到了固定版本的 noVNC 方法，升级后应重新跑协议测试。
+- `DesktopDiscovery` uses Network.framework to browse the Bonjour service `_rfb._tcp`. The app stores discovered service names and domains and resolves them again on reconnect. Manually entered connections store a host and port. Search filters locally.
+- `DesktopSession` connects directly to the macOS service with `NWConnection`. A bundled noVNC 1.7.0 client in `WKWebView` handles RFB decoding, rendering, and input. The in-process bridge passes binary data in batches of up to 64 KiB and waits for WebKit before reading again. The standard VNC path runs entirely on the local network.
+- Mac account sign-in uses ARD authentication. VNC password sign-in uses VNC challenge-response. The app saves credentials in the local Keychain only after successful authentication, with separate records for each Bonjour service or manual address. Enter credentials on the first connection or after changing the address. Use standard VNC on a trusted network.
+- Opening the standard remote desktop pauses Bluetooth pointer input. Each connection uses a fresh, nonpersistent WebView. Connection and authentication time out after 20 seconds. If sign-in fails, the form stays open so you can correct it and retry.
+- Builds use the bundled client resources. After changing dependencies or the browser bridge, run `npm ci` and `node build.mjs` from `scripts/vnc-client` to regenerate the HTML and license files. Authentication filtering relies on methods from the pinned noVNC version. Rerun the protocol checks after upgrading.
 
-## 验证和故障定位
+## Testing and Troubleshooting
 
-在 macOS 上运行 Tests/SystemDesktop/run.sh，需 Xcode 和带 cryptography 的 Python 3。测试使用临时本地服务和实际 WebKit 会话，分别校验 VNC 挑战响应、ARD 凭据加密、初始化和键盘消息。
+Run `Tests/SystemDesktop/run.sh` on macOS with Xcode and Python 3 with `cryptography` installed. The test uses a temporary local service and a WebKit session to verify VNC challenge-response, ARD credential encryption, initialization, and keyboard messages.
 
-真机验收应覆盖两种认证、可见桌面、单击和拖动、旋转屏幕、中文输入、错误密码、拒绝本地网络权限、Wi-Fi 断开、切后台、地址保存与移除。发现列表为空时先用系统显示的地址直连，以区分 Bonjour 发现和 TCP 可达性。地址也连不上时检查本地网络权限、Mac 睡眠和路由器的客户端隔离。登录被拒时检查允许访问的账户或 VNC 专用密码。
+On physical devices, verify both sign-in methods, desktop rendering, clicking and dragging, rotation, Chinese text input, incorrect passwords, denied local network access, Wi-Fi interruption, backgrounding, and saving or removing addresses.
+
+If discovery returns no results, connect directly to the address shown on your Mac to distinguish Bonjour discovery from TCP connectivity. If the direct connection also fails, check local network access, Mac sleep state, and router client isolation. If macOS rejects sign-in, check the allowed accounts or the dedicated VNC password.
