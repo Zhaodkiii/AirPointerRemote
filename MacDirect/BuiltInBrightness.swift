@@ -11,7 +11,7 @@ final class BuiltInBrightness {
     private let library = dlopen("/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices", RTLD_LAZY | RTLD_LOCAL)
     private let powerDomain = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
     private let defaults = UserDefaults.standard
-    private let log = Logger(subsystem: "com.daokaihua.airpointerremote.direct", category: "Brightness")
+    private let log = Logger(subsystem: "cn.zhaodk.glidecue.direct", category: "Brightness")
     private let savedKey = "lidDesktop.pendingBrightnessRestore"
     private var display: CGDirectDisplayID?
     private var openBrightness: Float?

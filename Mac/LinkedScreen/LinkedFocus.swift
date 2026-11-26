@@ -17,7 +17,7 @@ final class LinkedFocus {
         token = nil
     }
 
-    private let log = Logger(subsystem: "com.daokaihua.airpointerremote", category: "LinkedFocus")
+    private let log = Logger(subsystem: "cn.zhaodk.glidecue", category: "LinkedFocus")
     private var preparedEditorPID: pid_t?
 
     func prepareForClick() {

@@ -2,8 +2,8 @@
 "%@ connected" = "%@ connected";
 "Accessibility" = "Accessibility";
 "Accessibility: Pointer Control Allowed" = "Accessibility: Pointer Control Allowed";
-"Advertising. Open AirPointer Remote on your iPhone or Apple Watch." = "Advertising. Open AirPointer Remote on your iPhone or Apple Watch.";
-"AirPointer Remote — Allow " = "AirPointer Remote — Allow ";
+"Advertising. Open GlideCue Remote on your iPhone or Apple Watch." = "Advertising. Open GlideCue Remote on your iPhone or Apple Watch.";
+"GlideCue Remote — Allow " = "GlideCue Remote — Allow ";
 "Allow %@ to control the pointer?" = "Allow %@ to control the pointer?";
 "Allow Apple Watch to control the pointer?" = "Allow Apple Watch to control the pointer?";
 "Allow Bluetooth Access…" = "Allow Bluetooth Access…";
@@ -15,7 +15,7 @@
 "Allow only if you just selected this Mac on your nearby Apple Watch. This approval lasts for this connection." = "Allow only if you just selected this Mac on your nearby Apple Watch. This approval lasts for this connection.";
 "Allow pointer control on this Mac" = "Allow pointer control on this Mac";
 "Bluetooth" = "Bluetooth";
-"Bluetooth could not start. Reopen AirPointer Remote." = "Bluetooth could not start. Reopen AirPointer Remote.";
+"Bluetooth could not start. Reopen GlideCue Remote." = "Bluetooth could not start. Reopen GlideCue Remote.";
 "Bluetooth: Access Allowed" = "Bluetooth: Access Allowed";
 "Cellular" = "Cellular";
 "Centered" = "Centered";
@@ -33,10 +33,10 @@
 "Disconnected" = "Disconnected";
 "Display selection cancelled." = "Display selection cancelled.";
 "Display unavailable. Open the lid or reconnect a display." = "Display unavailable. Open the lid or reconnect a display.";
-"Enable AirPointer Remote to move, click, and drag the pointer from your iPhone or Apple Watch." = "Enable AirPointer Remote to move, click, and drag the pointer from your iPhone or Apple Watch.";
+"Enable GlideCue Remote to move, click, and drag the pointer from your iPhone or Apple Watch." = "Enable GlideCue Remote to move, click, and drag the pointer from your iPhone or Apple Watch.";
 "Forget All Remembered Displays" = "Forget All Remembered Displays";
 "Invalid message size." = "Invalid message size.";
-"Keep AirPointer Remote running on this Mac. Turn on Bluetooth on both devices. In System Settings → Privacy & Security → Accessibility, allow AirPointer Remote to move and click the pointer. Then select this Mac on your other device and confirm the connection here." = "Keep AirPointer Remote running on this Mac. Turn on Bluetooth on both devices. In System Settings → Privacy & Security → Accessibility, allow AirPointer Remote to move and click the pointer. Then select this Mac on your other device and confirm the connection here.";
+"Keep GlideCue Remote running on this Mac. Turn on Bluetooth on both devices. In System Settings → Privacy & Security → Accessibility, allow GlideCue Remote to move and click the pointer. Then select this Mac on your other device and confirm the connection here." = "Keep GlideCue Remote running on this Mac. Turn on Bluetooth on both devices. In System Settings → Privacy & Security → Accessibility, allow GlideCue Remote to move and click the pointer. Then select this Mac on your other device and confirm the connection here.";
 "Later" = "Later";
 "Lid Desktop did not resume. Open the lid and share Lid Desktop again." = "Lid Desktop did not resume. Open the lid and share Lid Desktop again.";
 "Mac display" = "Mac display";
@@ -47,7 +47,7 @@
 "Open Settings" = "Open Settings";
 "Pause Control" = "Pause Control";
 "Paused" = "Paused";
-"Quit AirPointer Remote" = "Quit AirPointer Remote";
+"Quit GlideCue Remote" = "Quit GlideCue Remote";
 "Remember Display for This iPhone" = "Remember Display for This iPhone";
 "Remember Display for This iPhone (Start Sharing First)" = "Remember Display for This iPhone (Start Sharing First)";
 "Remember “%@” for %@" = "Remember “%@” for %@";

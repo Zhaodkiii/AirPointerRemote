@@ -14,10 +14,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "B20000000000000000000006"
-               BuildableName = "AirPointerRemoteMac.app"
-               BlueprintName = "WatchPointer"
-               ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+               BlueprintIdentifier = "C30000000000000000000006"
+               BuildableName = "GlideCueRemote.app"
+               BlueprintName = "GlideCue Remote iPhone"
+               ReferencedContainer = "container:GlideCueRemote.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -44,10 +44,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "B20000000000000000000006"
-            BuildableName = "AirPointerRemoteMac.app"
-            BlueprintName = "WatchPointer"
-            ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+            BlueprintIdentifier = "C30000000000000000000006"
+            BuildableName = "GlideCueRemote.app"
+            BlueprintName = "GlideCue Remote iPhone"
+            ReferencedContainer = "container:GlideCueRemote.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -61,10 +61,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "B20000000000000000000006"
-            BuildableName = "AirPointerRemoteMac.app"
-            BlueprintName = "WatchPointer"
-            ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+            BlueprintIdentifier = "C30000000000000000000006"
+            BuildableName = "GlideCueRemote.app"
+            BlueprintName = "GlideCue Remote iPhone"
+            ReferencedContainer = "container:GlideCueRemote.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

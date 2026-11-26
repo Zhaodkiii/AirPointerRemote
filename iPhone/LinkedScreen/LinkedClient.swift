@@ -269,7 +269,7 @@ final class LinkedClient: ObservableObject {
         case .waiting:
             if adaptiveDesktop {
                 guard message.adaptiveDesktop == true else {
-                    end(String(localized: "Update AirPointer Remote Direct on your Mac to use iPhone Desktop."))
+                    end(String(localized: "Update GlideCue Remote Direct on your Mac to use iPhone Desktop."))
                     return
                 }
                 adaptiveAccepted = true
@@ -284,7 +284,7 @@ final class LinkedClient: ObservableObject {
                 : String(localized: "Choose the display to share on your Mac.")
         case .ready:
             if adaptiveDesktop && message.adaptiveDesktop != true {
-                end(String(localized: "Update AirPointer Remote Direct on your Mac to use iPhone Desktop."))
+                end(String(localized: "Update GlideCue Remote Direct on your Mac to use iPhone Desktop."))
                 return
             }
             if adaptiveDesktop && live && (size.width != message.x || size.height != message.y) {

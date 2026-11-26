@@ -76,7 +76,7 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
         stop.keyEquivalentModifierMask = [.control, .option, .command]
         add(String(localized: "Revoke All iPhone Pairings"), #selector(revoke), to: menu)
         menu.addItem(.separator())
-        add(String(localized: "Quit AirPointer Remote"), #selector(quit), to: menu)
+        add(String(localized: "Quit GlideCue Remote"), #selector(quit), to: menu)
         item.menu = menu
         receiver.onPhoneState = { [weak self] text in self?.status.title = text }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() }
@@ -133,7 +133,7 @@ final class ReceiverMenu: NSObject, NSMenuDelegate {
         if !accessibility { missing.append(ax ? String(localized: "Mouse Control") : String(localized: "Accessibility")) }
         if !bluetooth { missing.append(String(localized: "Bluetooth")) }
         if !screenRecording && LinkedHost.hasRememberedDisplays { missing.append(String(localized: "Screen Recording")) }
-        let description = missing.isEmpty ? "AirPointer Remote" : String(localized: "AirPointer Remote — Allow ") + missing.joined(separator: ", ")
+        let description = missing.isEmpty ? "GlideCue Remote" : String(localized: "GlideCue Remote — Allow ") + missing.joined(separator: ", ")
         item.button?.image = NSImage(systemSymbolName: missing.isEmpty ? "cursorarrow.rays" : "exclamationmark.circle",
                                      accessibilityDescription: description)
         item.button?.setAccessibilityLabel(description)
@@ -438,7 +438,7 @@ private struct PermissionSetup: View {
                         Image(nsImage: NSWorkspace.shared.icon(forFile: appURL.path))
                             .resizable().frame(width: 54, height: 54).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Set up AirPointer Remote").font(.title.bold())
+                            Text("Set up GlideCue Remote").font(.title.bold())
                             Text("Choose the permissions for the features you use.").foregroundStyle(.secondary)
                         }
                     }

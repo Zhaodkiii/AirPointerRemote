@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.daokaihua.airpointerremote.direct.power</string>
+    <string>cn.zhaodk.glidecue.direct.power</string>
     <key>BundleProgram</key>
     <string>Contents/MacOS/AirPointerLidPower</string>
     <key>MachServices</key>
     <dict>
-        <key>com.daokaihua.airpointerremote.direct.power</key>
+        <key>cn.zhaodk.glidecue.direct.power</key>
         <true/>
     </dict>
     <key>KeepAlive</key>
     <true/>
     <key>AssociatedBundleIdentifiers</key>
-    <array><string>com.daokaihua.airpointerremote.direct</string></array>
+    <array><string>cn.zhaodk.glidecue.direct</string></array>
 </dict>
 </plist>

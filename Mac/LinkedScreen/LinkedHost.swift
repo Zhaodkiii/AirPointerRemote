@@ -82,7 +82,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private var encoding = false
     private var generation = 0
     private var readyAfterDrain: LinkedMessage?
-    private let videoLog = Logger(subsystem: "com.daokaihua.airpointerremote", category: "LinkedVideo")
+    private let videoLog = Logger(subsystem: "cn.zhaodk.glidecue", category: "LinkedVideo")
     private var lastStallLog: TimeInterval = 0
     private var lastSlowFrameLog: TimeInterval = 0
     private var recoveringFromDelay = false
@@ -105,7 +105,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
     private var activity: NSObjectProtocol?
     private let mouse = PhoneMouse()
     private let focus = LinkedFocus()
-    private let focusLog = Logger(subsystem: "com.daokaihua.airpointerremote", category: "LinkedFocus")
+    private let focusLog = Logger(subsystem: "cn.zhaodk.glidecue", category: "LinkedFocus")
     private var pendingKeyboardClick: UUID?
     private var leftPress: (point: CGPoint, time: TimeInterval)?
     private var lastFocus: UUID?
@@ -368,7 +368,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         #if CLOSED_LID_DESKTOP
         guard CGPreflightScreenCaptureAccess() else {
             _ = CGRequestScreenCaptureAccess()
-            stop("Allow Screen Recording for AirPointer Remote Direct on the Mac, then reconnect.")
+            stop("Allow Screen Recording for GlideCue Remote Direct on the Mac, then reconnect.")
             return
         }
         deadline = Date().addingTimeInterval(18)
@@ -376,7 +376,7 @@ final class LinkedHost: NSObject, SCContentSharingPickerObserver, SCStreamOutput
         waiting.adaptiveDesktop = true
         channel?.send(waiting)
         #else
-        stop("iPhone Desktop requires AirPointer Remote Direct on the Mac.")
+        stop("iPhone Desktop requires GlideCue Remote Direct on the Mac.")
         #endif
     }
 

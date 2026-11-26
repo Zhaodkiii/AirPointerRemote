@@ -36,7 +36,7 @@ struct FoundMac: Identifiable {
 
 final class Pointer: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     @Published var connected = false
-    @Published var receiverStatus = String(localized: "Open AirPointer Remote on your Mac.")
+    @Published var receiverStatus = String(localized: "Open GlideCue Remote on your Mac.")
     private var foreground = false
 
     func setActive(_ active: Bool) {
@@ -194,7 +194,7 @@ final class Pointer: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         switch central.state {
         case .poweredOn: start()
         case .poweredOff: reset(); receiverStatus = String(localized: "Turn on Bluetooth on Apple Watch.")
-        case .unauthorized: reset(); receiverStatus = String(localized: "Allow Bluetooth access for AirPointer Remote in Settings.")
+        case .unauthorized: reset(); receiverStatus = String(localized: "Allow Bluetooth access for GlideCue Remote in Settings.")
         case .unsupported: reset(); receiverStatus = String(localized: "Bluetooth control requires a physical Apple Watch.")
         default: break
         }
@@ -204,7 +204,7 @@ final class Pointer: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     private func start() {
         guard foreground, central.state == .poweredOn, mac == nil else { return }
         found = []
-        receiverStatus = pairedID == nil ? String(localized: "Open AirPointer Remote on your Mac.") : String(localized: "Waiting for your Mac. Keep the Mac app open.")
+        receiverStatus = pairedID == nil ? String(localized: "Open GlideCue Remote on your Mac.") : String(localized: "Waiting for your Mac. Keep the Mac app open.")
         if let pairedID, let known = central.retrievePeripherals(withIdentifiers: [pairedID]).first {
             connect(to: known)
         }
@@ -268,7 +268,7 @@ final class Pointer: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard mac === peripheral else { return }
         guard error == nil, let service = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else {
-            receiverStatus = String(localized: "AirPointer Remote is unavailable on this Mac. Open the Mac app and try again.")
+            receiverStatus = String(localized: "GlideCue Remote is unavailable on this Mac. Open the Mac app and try again.")
             return
         }
         peripheral.discoverCharacteristics([inputUUID, outputUUID], for: service)
@@ -279,7 +279,7 @@ final class Pointer: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         input = service.characteristics?.first { $0.uuid == inputUUID }
         output = service.characteristics?.first { $0.uuid == outputUUID }
         guard error == nil, input != nil, let output else {
-            receiverStatus = String(localized: "Update AirPointer Remote on your Mac, then reconnect.")
+            receiverStatus = String(localized: "Update GlideCue Remote on your Mac, then reconnect.")
             return
         }
         peripheral.setNotifyValue(true, for: output)
@@ -306,7 +306,7 @@ final class Pointer: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         switch state {
         case 0: receiverStatus = String(localized: "Approve the Apple Watch connection on your Mac."); sendInfo()
         case 1: receiverStatus = String(localized: "Connected"); if !connected { recenter(); sendInfo() }
-        case 2: receiverStatus = String(localized: "Allow AirPointer Remote in Mac Accessibility settings.")
+        case 2: receiverStatus = String(localized: "Allow GlideCue Remote in Mac Accessibility settings.")
         case 3: receiverStatus = String(localized: "Control is paused. Resume it from the Mac menu bar.")
         case 4: receiverStatus = String(localized: "Connection declined on Mac. Forget this Mac to try again.")
         case 5: receiverStatus = String(localized: "Another device has control. Disconnect it to use Apple Watch.")

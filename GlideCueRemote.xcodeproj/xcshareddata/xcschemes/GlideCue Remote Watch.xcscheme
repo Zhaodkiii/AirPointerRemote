@@ -14,10 +14,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C30000000000000000000006"
-               BuildableName = "AirPointerRemote.app"
-               BlueprintName = "AirPointer Remote iPhone"
-               ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+               BlueprintIdentifier = "A10000000000000000000006"
+               BuildableName = "GlideCueRemoteWatch.app"
+               BlueprintName = "WatchPointer"
+               ReferencedContainer = "container:GlideCueRemote.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -44,10 +44,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C30000000000000000000006"
-            BuildableName = "AirPointerRemote.app"
-            BlueprintName = "AirPointer Remote iPhone"
-            ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+            BlueprintIdentifier = "A10000000000000000000006"
+            BuildableName = "GlideCueRemoteWatch.app"
+            ReferencedContainer = "container:GlideCueRemote.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -61,10 +60,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C30000000000000000000006"
-            BuildableName = "AirPointerRemote.app"
-            BlueprintName = "AirPointer Remote iPhone"
-            ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+            BlueprintIdentifier = "A10000000000000000000006"
+            BuildableName = "GlideCueRemoteWatch.app"
+            ReferencedContainer = "container:GlideCueRemote.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

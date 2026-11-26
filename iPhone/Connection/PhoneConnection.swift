@@ -296,7 +296,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         }
         switch central.state {
         case .poweredOn: scan()
-        case .unauthorized: clearSession(); status = String(localized: "Allow Bluetooth for AirPointer Remote in iPhone Settings.")
+        case .unauthorized: clearSession(); status = String(localized: "Allow Bluetooth for GlideCue Remote in iPhone Settings.")
         case .poweredOff: clearSession(); status = String(localized: "Turn on Bluetooth in Settings.")
         case .unsupported: clearSession(); status = String(localized: "Bluetooth control is unavailable on this device.")
         default: status = String(localized: "Preparing Bluetooth…")
@@ -332,7 +332,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard self.peripheral === peripheral else { return }
         guard error == nil, let service = peripheral.services?.first(where: { $0.uuid == CBUUID(string: PhoneProtocol.service) }) else {
-            disconnect(message: String(localized: "Could not find AirPointer Remote on this Mac. Open the Mac app and try again."))
+            disconnect(message: String(localized: "Could not find GlideCue Remote on this Mac. Open the Mac app and try again."))
             return
         }
         peripheral.discoverCharacteristics([CBUUID(string: PhoneProtocol.input), CBUUID(string: PhoneProtocol.output)], for: service)
@@ -343,7 +343,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
         input = service.characteristics?.first { $0.uuid == CBUUID(string: PhoneProtocol.input) }
         output = service.characteristics?.first { $0.uuid == CBUUID(string: PhoneProtocol.output) }
         guard input != nil, let output else {
-            disconnect(message: String(localized: "Update AirPointer Remote on the Mac, then try again."))
+            disconnect(message: String(localized: "Update GlideCue Remote on the Mac, then try again."))
             return
         }
         peripheral.setNotifyValue(true, for: output)
@@ -434,7 +434,7 @@ final class PhoneConnection: NSObject, ObservableObject, CBCentralManagerDelegat
             connected = true
             connecting = false
             pairingCode = nil
-            status = update.paused ? String(localized: "Control is paused. If paused on the Mac, resume from its menu bar.") : update.accessibility ? String(localized: "Connected. You can control the pointer.") : String(localized: "On the Mac, allow AirPointer Remote in System Settings → Privacy & Security → Accessibility.")
+            status = update.paused ? String(localized: "Control is paused. If paused on the Mac, resume from its menu bar.") : update.accessibility ? String(localized: "Connected. You can control the pointer.") : String(localized: "On the Mac, allow GlideCue Remote in System Settings → Privacy & Security → Accessibility.")
         case "timeout": disconnect(reconnect: true, message: String(localized: "Waiting for the paired Mac to wake…"))
         case "confirm": break
         default:

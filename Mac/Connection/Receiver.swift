@@ -199,14 +199,14 @@ final class Receiver: NSObject, CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         if let error {
             print("Bluetooth service error: \(error)")
-            DispatchQueue.main.async { self.onPhoneState?(String(localized: "Bluetooth could not start. Reopen AirPointer Remote.")) }
+            DispatchQueue.main.async { self.onPhoneState?(String(localized: "Bluetooth could not start. Reopen GlideCue Remote.")) }
             return
         }
         // The Mac's own name ("Sam's MacBook Pro"), so the watch's pairing list says which Mac this is.
         let name = String((Host.current().localizedName ?? "Mac").prefix(24))
         peripheral.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [serviceUUID],
                                      CBAdvertisementDataLocalNameKey: name])
-        print(String(localized: "Advertising. Open AirPointer Remote on your iPhone or Apple Watch."))
+        print(String(localized: "Advertising. Open GlideCue Remote on your iPhone or Apple Watch."))
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {

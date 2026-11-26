@@ -1,6 +1,6 @@
 # Linked Screen 弱网流畅度与操作延迟需求
 
-适用对象为 AirPointer Remote 的 Mac 接收端和 iPhone Linked Screen。本文包含实现要求与待真机标定的验收目标。
+适用对象为 GlideCue Remote 的 Mac 接收端和 iPhone Linked Screen。本文包含实现要求与待真机标定的验收目标。
 
 新版在 iPhone 共享页的更多菜单提供 **Stream Diagnostics（图传诊断）**。连续滚动文档或拖动窗口时，可对比最近一分钟播放器入队帧率、系统提供的显示帧率、最长到帧间隔、最慢收帧到入队耗时和触控往返延迟的第 95 百分位。静止桌面可能停止出帧，空闲时间也计入到帧间隔。系统尚无播放统计、尚无触控样本或旧版 Mac 缺少相应回执时显示破折号。
 

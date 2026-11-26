@@ -158,7 +158,7 @@ struct PhoneAssembler {
 enum PhoneKeychain {
     static func read(_ account: String) -> Data? {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "com.daokaihua.airpointerremote.phone", kSecAttrAccount as String: account,
+            kSecAttrService as String: "cn.zhaodk.glidecue.phone", kSecAttrAccount as String: account,
             kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         var result: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
@@ -167,7 +167,7 @@ enum PhoneKeychain {
 
     @discardableResult static func save(_ data: Data, account: String) -> Bool {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "com.daokaihua.airpointerremote.phone", kSecAttrAccount as String: account]
+            kSecAttrService as String: "cn.zhaodk.glidecue.phone", kSecAttrAccount as String: account]
         let attributes: [String: Any] = [kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
@@ -178,7 +178,7 @@ enum PhoneKeychain {
 
     static func remove(_ account: String) {
         SecItemDelete([kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "com.daokaihua.airpointerremote.phone", kSecAttrAccount as String: account] as CFDictionary)
+            kSecAttrService as String: "cn.zhaodk.glidecue.phone", kSecAttrAccount as String: account] as CFDictionary)
     }
 
     static func identity() throws -> Curve25519.KeyAgreement.PrivateKey {

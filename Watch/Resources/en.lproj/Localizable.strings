@@ -1,6 +1,6 @@
-"AirPointer Remote is unavailable on this Mac. Open the Mac app and try again." = "AirPointer Remote is unavailable on this Mac. Open the Mac app and try again.";
-"Allow AirPointer Remote in Mac Accessibility settings." = "Allow AirPointer Remote in Mac Accessibility settings.";
-"Allow Bluetooth access for AirPointer Remote in Settings." = "Allow Bluetooth access for AirPointer Remote in Settings.";
+"GlideCue Remote is unavailable on this Mac. Open the Mac app and try again." = "GlideCue Remote is unavailable on this Mac. Open the Mac app and try again.";
+"Allow GlideCue Remote in Mac Accessibility settings." = "Allow GlideCue Remote in Mac Accessibility settings.";
+"Allow Bluetooth access for GlideCue Remote in Settings." = "Allow Bluetooth access for GlideCue Remote in Settings.";
 "Another device has control. Disconnect it to use Apple Watch." = "Another device has control. Disconnect it to use Apple Watch.";
 "Approve the Apple Watch connection on your Mac." = "Approve the Apple Watch connection on your Mac.";
 "Bluetooth control requires a physical Apple Watch." = "Bluetooth control requires a physical Apple Watch.";
@@ -10,7 +10,7 @@
 "Could not connect. Forget this Mac and try again." = "Could not connect. Forget this Mac and try again.";
 "Forget" = "Forget";
 "Mouse click pad" = "Mouse click pad";
-"Open AirPointer Remote on your Mac." = "Open AirPointer Remote on your Mac.";
+"Open GlideCue Remote on your Mac." = "Open GlideCue Remote on your Mac.";
 "Pair" = "Pair";
 "Pause control" = "Pause control";
 "Recenter pointer" = "Recenter pointer";
@@ -19,5 +19,5 @@
 "Tap to click. Touch and hold to drag." = "Tap to click. Touch and hold to drag.";
 "Turn on Bluetooth on Apple Watch." = "Turn on Bluetooth on Apple Watch.";
 "Unpair" = "Unpair";
-"Update AirPointer Remote on your Mac, then reconnect." = "Update AirPointer Remote on your Mac, then reconnect.";
+"Update GlideCue Remote on your Mac, then reconnect." = "Update GlideCue Remote on your Mac, then reconnect.";
 "Waiting for your Mac. Keep the Mac app open." = "Waiting for your Mac. Keep the Mac app open.";

@@ -16,9 +16,9 @@ struct MacSetupGuide: View {
     @State private var step = 0
     @State private var showShareError = false
 
-    private let installer = Bundle.main.url(forResource: "AirPointer Remote for Mac", withExtension: "dmg")
+    private let installer = Bundle.main.url(forResource: "GlideCue Remote for Mac", withExtension: "dmg")
     private let stillTimes = [1.0, 6.5, 10.5]
-    private let directions = [String(localized: "Choose your Mac in AirDrop."), String(localized: "Drag AirPointer Remote into Applications."),
+    private let directions = [String(localized: "Choose your Mac in AirDrop."), String(localized: "Drag GlideCue Remote into Applications."),
                               String(localized: "Open the Mac app, then select your Mac on iPhone.")]
     private var manual: Bool { reduceMotion || voiceOver || player == nil }
     private var nearbyMac: NearbyMac? { connection.nearby.count == 1 ? connection.nearby.first : nil }

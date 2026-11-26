@@ -14,10 +14,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D40000000000000000000006"
-               BuildableName = "AirPointerRemoteMacDirect.app"
-               BlueprintName = "AirPointer Remote Mac Direct"
-               ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+               BlueprintIdentifier = "B20000000000000000000006"
+               BuildableName = "GlideCueRemoteMac.app"
+               BlueprintName = "WatchPointer"
+               ReferencedContainer = "container:GlideCueRemote.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -44,10 +44,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "D40000000000000000000006"
-            BuildableName = "AirPointerRemoteMacDirect.app"
-            BlueprintName = "AirPointer Remote Mac Direct"
-            ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+            BlueprintIdentifier = "B20000000000000000000006"
+            BuildableName = "GlideCueRemoteMac.app"
+            BlueprintName = "WatchPointer"
+            ReferencedContainer = "container:GlideCueRemote.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -61,10 +61,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "D40000000000000000000006"
-            BuildableName = "AirPointerRemoteMacDirect.app"
-            BlueprintName = "AirPointer Remote Mac Direct"
-            ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+            BlueprintIdentifier = "B20000000000000000000006"
+            BuildableName = "GlideCueRemoteMac.app"
+            BlueprintName = "WatchPointer"
+            ReferencedContainer = "container:GlideCueRemote.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -1,4 +1,4 @@
-# AirPointer Remote · 屏幕联动需求
+# GlideCue Remote · 屏幕联动需求
 
 Linked Screen 已接入真实 Mac 屏幕、鼠标和文字输入。默认产品文案为英文。
 

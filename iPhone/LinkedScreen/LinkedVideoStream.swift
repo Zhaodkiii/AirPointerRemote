@@ -5,10 +5,10 @@ import os
 /// Receives, decodes and acknowledges video independently of SwiftUI and scene callbacks.
 final class LinkedVideoStream {
     private enum Playback { case waiting, playing, paused }
-    private static let videoQueue = DispatchQueue(label: "com.daokaihua.airpointerremote.linked-video", qos: .userInitiated)
+    private static let videoQueue = DispatchQueue(label: "cn.zhaodk.glidecue.linked-video", qos: .userInitiated)
     private var queue: DispatchQueue { Self.videoQueue }
     private let renderer: AVSampleBufferVideoRenderer
-    private let controlQueue = DispatchQueue(label: "com.daokaihua.airpointerremote.linked-control", qos: .userInteractive)
+    private let controlQueue = DispatchQueue(label: "cn.zhaodk.glidecue.linked-control", qos: .userInteractive)
     private let offer: LinkedOffer
     private var videoLane: LinkedChannel?
     private var hasDedicatedVideo = false
@@ -28,7 +28,7 @@ final class LinkedVideoStream {
     private var encodedSize = ""
     var onDiagnostics: ((VideoDiagnostics) -> Void)?
 
-    private let log = Logger(subsystem: "com.daokaihua.airpointerremote", category: "LinkedVideoClient")
+    private let log = Logger(subsystem: "cn.zhaodk.glidecue", category: "LinkedVideoClient")
     private var decoder = LinkedDecoder()
     private var playback: Playback = .waiting
     private var needsFirstFrame = true

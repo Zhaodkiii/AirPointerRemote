@@ -16,6 +16,7 @@ struct SystemDesktopHome: View {
     @AppStorage("desktop.computers") private var stored = Data()
     @State private var address = ""
     @State private var manual = false
+    @State private var removal: DesktopComputer?
     @State private var selection: LoginTarget?
     @FocusState private var addressFocused: Bool
 
@@ -50,8 +51,7 @@ struct SystemDesktopHome: View {
         .contextMenu {
             if saved {
                 Button("Remove Saved Mac", systemImage: "trash", role: .destructive) {
-                    DesktopCredentials.remove(for: item)
-                    write(computers.filter { $0.id != item.id })
+                    removal = item
                 }
             }
         }
@@ -63,10 +63,8 @@ struct SystemDesktopHome: View {
                 Text("iPhone Desktop").tag(false)
                 Text("Mirror Mac Screen").tag(true)
             }.pickerStyle(.segmented)
-            if !mirror {
-                Text("Sign in as the current Mac user to control a private, iPhone-sized desktop. The Mac display goes dark until you disconnect.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
+            Text(mirror ? "Mirroring shows the same desktop on your Mac and iPhone." : "A private desktop fits your iPhone. The Mac display goes dark until you disconnect.")
+                .font(.subheadline).foregroundStyle(.secondary)
             if !computers.isEmpty {
                 Text("My Macs").font(.headline).accessibilityAddTraits(.isHeader)
                 ForEach(computers) { row($0, saved: true) }
@@ -88,6 +86,10 @@ struct SystemDesktopHome: View {
                         .submitLabel(.go)
                         .focused($addressFocused)
                         .onSubmit(connectByAddress)
+                    if !address.isEmpty && DesktopComputer.parse(address) == nil {
+                        Text("Enter a host name or IP address, optionally followed by a port from 1 to 65535.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     Button("Continue", action: connectByAddress).buttonStyle(.borderedProminent)
                         .disabled(DesktopComputer.parse(address) == nil)
                 }.padding(.top, 8)
@@ -102,9 +104,17 @@ struct SystemDesktopHome: View {
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
         }
         .fullScreenCover(item: $selection) { target in
-            DesktopLogin(connection: connection, computer: target.computer, adaptive: !mirror, autoConnect: target.autoConnect) {
+            DesktopLogin(connection: connection, computer: target.computer, mirror: $mirror, autoConnect: target.autoConnect) {
                 write([target.computer] + computers.filter { $0.id != target.id })
             }
+        }
+        .confirmationDialog("Remove Saved Mac", isPresented: Binding(get: { removal != nil }, set: { if !$0 { removal = nil } }), presenting: removal) { item in
+            Button("Remove Saved Mac", role: .destructive) {
+                DesktopCredentials.remove(for: item)
+                write(computers.filter { $0.id != item.id })
+            }
+        } message: { item in
+            Text("Remove the saved sign-in for \(item.name) from this iPhone?")
         }
         .onAppear { discovery.start() }
         .onDisappear { discovery.stop() }
@@ -120,7 +130,8 @@ struct SystemDesktopHome: View {
 private struct DesktopLogin: View {
     let connection: PhoneConnection
     let computer: DesktopComputer
-    let adaptive: Bool
+    @Binding var mirror: Bool
+    private var adaptive: Bool { !mirror }
     let autoConnect: Bool
     let remember: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -205,17 +216,21 @@ private struct DesktopLogin: View {
                                 .textContentType(.password)
                                 .focused($field, equals: .password)
                                 .submitLabel(.go).onSubmit(connect)
+                        } header: {
+                            Text(adaptive ? "iPhone Desktop" : "Mirror Mac Screen")
                         } footer: {
-                            if adaptive {
-                                Text("Use the account currently signed in on the Mac.")
-                            } else {
-                                Text(account ? "Use the account allowed in your Mac’s Screen Sharing settings." : "Use the dedicated VNC password configured on your Mac.")
+                            VStack(alignment: .leading, spacing: 4) {
+                                if adaptive {
+                                    Text("Use the account currently signed in on the Mac.")
+                                } else {
+                                    Text(account ? "Use the account allowed in your Mac’s Screen Sharing settings." : "Use the dedicated VNC password configured on your Mac.")
+                                }
+                                Text("Successful sign-ins are saved in this iPhone’s Keychain.")
                             }
                         }.disabled(connecting)
 
-                        Section {
-                            Label("Successful sign-ins are saved in this iPhone’s Keychain.", systemImage: "key")
-                                .font(.footnote).foregroundStyle(.secondary)
+                        if adaptive && connecting && highPerformance.session.connectionState.isConnected {
+                            Text("Signed in. Waiting for the desktop…").font(.footnote)
                         }
                         if attempted && !connecting {
                             Text(adaptive ? highPerformance.error ?? "" : session.status).font(.subheadline).foregroundStyle(.secondary)
@@ -228,14 +243,27 @@ private struct DesktopLogin: View {
                                 }
                             }
                         }
-                        Button(action: connect) {
+                        Button {
+                            if adaptive && highPerformance.offersMirror {
+                                highPerformance.stop()
+                                attempted = false
+                                password = ""
+                                mirror = true
+                            } else {
+                                connect()
+                            }
+                        } label: {
                             HStack(spacing: 8) {
                                 if connecting { ProgressView().controlSize(.small) }
-                                Text(connecting ? "Connecting…" : "Connect")
+                                if adaptive && highPerformance.offersMirror {
+                                    Text("Switch to mirroring")
+                                } else {
+                                    Text(connecting ? "Connecting…" : "Connect")
+                                }
                             }.frame(maxWidth: .infinity, minHeight: 28)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(!canConnect)
+                        .disabled(!canConnect && !(adaptive && highPerformance.offersMirror))
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                     }
@@ -243,7 +271,7 @@ private struct DesktopLogin: View {
                 }
             }.navigationTitle(computer.name).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { session.stop(); dismiss() }
+                Button("Cancel") { highPerformance.stop(); session.stop(); dismiss() }
             } }
         }
         .onAppear {
@@ -263,6 +291,9 @@ private struct DesktopLogin: View {
             }.ignoresSafeArea()
         }
         .onDisappear { highPerformance.stop(); session.stop() }
+        .onChange(of: highPerformance.credentialsRejected) { _, rejected in
+            if rejected { password = ""; field = .password }
+        }
         .onChange(of: session.authenticationRejected) { _, rejected in
             if rejected { password = ""; field = .password }
         }
@@ -287,7 +318,7 @@ private struct DesktopLogin: View {
         }
     }
     private func connect() {
-        guard canConnect else { return }
+        guard canConnect, !(adaptive && highPerformance.offersMirror) else { return }
         begin(DesktopCredentials(username: username.trimmingCharacters(in: .whitespacesAndNewlines), password: password, account: account))
     }
 

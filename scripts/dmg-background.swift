@@ -34,8 +34,8 @@ func rounded(_ x: CGFloat, _ top: CGFloat, _ w: CGFloat, _ h: CGFloat, radius: C
 
 let frame = CGRect(x: 0, y: 0, width: width, height: height)
 NSGradient(starting: color(0x142440), ending: color(0x090F20))!.draw(in: frame, angle: -90)
-centered("Install AirPointer Remote", fromTop: 36, size: 29, weight: .bold, ink: 0xFFFFFF)
-centered("Drag AirPointer Remote into Applications.", fromTop: 80, size: 16, weight: .medium, ink: 0xD6E4FF)
+centered("Install GlideCue Remote", fromTop: 36, size: 29, weight: .bold, ink: 0xFFFFFF)
+centered("Drag GlideCue Remote into Applications.", fromTop: 80, size: 16, weight: .medium, ink: 0xD6E4FF)
 
 for x in [CGFloat(80), 376] {
     let card = rounded(x, 133, 184, 143, radius: 20)

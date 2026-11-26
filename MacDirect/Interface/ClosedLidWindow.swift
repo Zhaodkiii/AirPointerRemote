@@ -44,7 +44,7 @@ private struct ClosedLidSettings: View {
                     .foregroundStyle(.secondary)
             }
             if !desktop.enabled && desktop.supported && !desktop.active && desktop.message.isEmpty {
-                Text("Enable this option to keep controlling your Mac from a paired iPhone when you close the lid. Pair your iPhone by selecting this Mac in AirPointer Remote.")
+                Text("Enable this option to keep controlling your Mac from a paired iPhone when you close the lid. Pair your iPhone by selecting this Mac in GlideCue Remote.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -79,7 +79,7 @@ private struct ClosedLidSettings: View {
                             Text("Keep the lid open and tap Share on your paired iPhone. Close the lid after the iPhone shows Lid Desktop.")
                         }
                     } else {
-                        Text("Allow Screen Recording and set up Closed-Lid Power before starting from your iPhone. Restart AirPointer Remote if macOS asks.")
+                        Text("Allow Screen Recording and set up Closed-Lid Power before starting from your iPhone. Restart GlideCue Remote if macOS asks.")
                     }
                     if let warning = desktop.powerWarning {
                         Label(Bundle.main.localizedString(forKey: warning, value: warning, table: nil),

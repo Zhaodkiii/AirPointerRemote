@@ -35,7 +35,7 @@ struct MirrorWheelMotion {
 @MainActor
 final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WKScriptMessageHandler {
     @Published private(set) var connected = false
-    @Published private(set) var status = "正在连接…"
+    @Published private(set) var status = String(localized: "Connecting…")
     let mirrorVideo = MirrorVideo()
     #if os(iOS)
     let pictureInPicture = DesktopPictureInPicture()
@@ -58,7 +58,7 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
         stop()
         authenticationRejected = false
         guard let page = Bundle.main.url(forResource: "SystemDesktop", withExtension: "html") else {
-            status = "缺少桌面组件，请重新安装 App。"; return
+            status = String(localized: "The desktop component is missing. Reinstall the app."); return
         }
         credentials = ["username": username, "password": password, "method": account ? "account" : "vnc"]
         authenticated = onConnected
@@ -74,11 +74,11 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
         web = view
         view.navigationDelegate = self
         transport = NWConnection(to: computer.endpoint, using: .tcp)
-        status = "正在连接 " + computer.name
+        status = String(localized: "Connecting to \(computer.name)")
         view.loadFileURL(page, allowingReadAccessTo: page)
         timeout = Task { [weak self] in
             try? await Task.sleep(for: .seconds(20))
-            if !Task.isCancelled { self?.fail("连接超时。请确认电脑已唤醒、屏幕共享已开启，并允许本地网络访问。") }
+            if !Task.isCancelled { self?.fail(String(localized: "The connection timed out. Wake your Mac, turn on Screen Sharing, and allow Local Network access.")) }
         }
     }
 
@@ -93,10 +93,10 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
                     self.credentials.removeAll()
                     webView.callAsyncJavaScript("begin(username,password,method)", arguments: args, in: nil, in: .page) { result in
                         guard self.transport === connection else { return }
-                        if case .failure = result { self.fail("桌面组件启动失败。"); return }
+                        if case .failure = result { self.fail(String(localized: "The desktop component could not start.")); return }
                         self.receive(connection)
                     }
-                case .failed(let error): self.fail("连接失败：" + error.localizedDescription)
+                case .failed(let error): self.fail(String(localized: "Connection failed: \(error.localizedDescription)"))
                 default: break
                 }
             }
@@ -108,11 +108,11 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, complete, error in
             DispatchQueue.main.async {
                 guard let self, self.transport === connection else { return }
-                guard let data, !data.isEmpty else { self.fail("Mac 已断开连接。"); return }
+                guard let data, !data.isEmpty else { self.fail(String(localized: "The Mac disconnected.")); return }
                 self.web?.callAsyncJavaScript("receive(packet)", arguments: ["packet": data.base64EncodedString()], in: nil, in: .page) { result in
                     guard self.transport === connection else { return }
-                    if case .failure = result { self.fail("无法读取远程画面。"); return }
-                    if complete || error != nil { self.fail("Mac 已断开连接。"); return }
+                    if case .failure = result { self.fail(String(localized: "Could not read the remote display.")); return }
+                    if complete || error != nil { self.fail(String(localized: "The Mac disconnected.")); return }
                     self.receive(connection)
                 }
             }
@@ -133,7 +133,7 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
                 }
             })
         case "connected":
-            timeout?.cancel(); connected = true; status = "已连接"
+            timeout?.cancel(); connected = true; status = String(localized: "Connected")
             authenticated?(); authenticated = nil
         case "mirrorFrame":
             if let value = body["value"], let jpeg = Data(base64Encoded: value) { mirrorVideo.receive(jpeg) }
@@ -141,14 +141,14 @@ final class DesktopSession: NSObject, ObservableObject, WKNavigationDelegate, WK
         case "overview": canResetViewport = body["value"] == "yes"
         case "authError":
             authenticationRejected = true
-            fail("登录失败，请检查凭据及 Mac 允许访问的用户。")
-        case "close", "ended": fail(connected ? "会话已结束。" : "无法完成登录，请检查认证方式和屏幕共享设置。")
+            fail(String(localized: "Sign-in failed. Check your credentials and the users allowed on your Mac."))
+        case "close", "ended": fail(connected ? String(localized: "The session ended.") : String(localized: "Could not sign in. Check the authentication method and Screen Sharing settings."))
         default: break
         }
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        if webView === web { fail("桌面显示进程已退出，请重新连接。") }
+        if webView === web { fail(String(localized: "The desktop display stopped. Connect again.")) }
     }
 
     func send(text: String) {

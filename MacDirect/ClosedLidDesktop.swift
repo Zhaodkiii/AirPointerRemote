@@ -178,7 +178,7 @@ final class ClosedLidDesktop: ObservableObject {
                 try service.register()
                 if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
             } catch {
-                message = String(localized: "Could not register the power helper. Open AirPointer Remote from Applications.") + " " + error.localizedDescription
+                message = String(localized: "Could not register the power helper. Open GlideCue Remote from Applications.") + " " + error.localizedDescription
             }
         }
         refresh()
@@ -243,7 +243,7 @@ final class ClosedLidDesktop: ObservableObject {
 
         let connection = NSXPCConnection(machServiceName: LidPowerService.identifier, options: .privileged)
         self.connection = connection
-        connection.setCodeSigningRequirement(#"anchor apple generic and identifier "com.daokaihua.airpointerremote.direct.power" and certificate leaf[subject.OU] = "4AN6PV98G7""#)
+        connection.setCodeSigningRequirement(#"anchor apple generic and identifier "cn.zhaodk.glidecue.direct.power" and certificate leaf[subject.OU] = "4AN6PV98G7""#)
         connection.remoteObjectInterface = NSXPCInterface(with: LidPowerProtocol.self)
         connection.resume()
         remote(connection)?.begin { [weak self] reason in

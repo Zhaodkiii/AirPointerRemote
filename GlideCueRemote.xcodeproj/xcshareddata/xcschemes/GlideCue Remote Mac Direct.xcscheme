@@ -14,10 +14,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A10000000000000000000006"
-               BuildableName = "AirPointerRemoteWatch.app"
-               BlueprintName = "WatchPointer"
-               ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+               BlueprintIdentifier = "D40000000000000000000006"
+               BuildableName = "GlideCueRemoteMacDirect.app"
+               BlueprintName = "GlideCue Remote Mac Direct"
+               ReferencedContainer = "container:GlideCueRemote.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -44,9 +44,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A10000000000000000000006"
-            BuildableName = "AirPointerRemoteWatch.app"
-            ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+            BlueprintIdentifier = "D40000000000000000000006"
+            BuildableName = "GlideCueRemoteMacDirect.app"
+            BlueprintName = "GlideCue Remote Mac Direct"
+            ReferencedContainer = "container:GlideCueRemote.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -60,9 +61,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A10000000000000000000006"
-            BuildableName = "AirPointerRemoteWatch.app"
-            ReferencedContainer = "container:AirPointerRemote.xcodeproj">
+            BlueprintIdentifier = "D40000000000000000000006"
+            BuildableName = "GlideCueRemoteMacDirect.app"
+            BlueprintName = "GlideCue Remote Mac Direct"
+            ReferencedContainer = "container:GlideCueRemote.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

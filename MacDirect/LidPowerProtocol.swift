@@ -1,7 +1,7 @@
 import Foundation
 
 enum LidPowerService {
-    static let identifier = "com.daokaihua.airpointerremote.direct.power"
+    static let identifier = "cn.zhaodk.glidecue.direct.power"
     static let plistName = identifier + ".plist"
 }
 

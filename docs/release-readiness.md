@@ -1,6 +1,6 @@
-# AirPointer Remote 首发检查
+# GlideCue Remote 首发检查
 
-App Store Connect 记录为 AirPointer Remote - Air Mouse（6836338720），主语言英语（美国）。此前确认首发覆盖 174 个市场，中国大陆未供应。发布前在商店后台复核地区，分别提交 iOS（内嵌独立运行的 Watch App）和 macOS 版本。
+App Store Connect 记录为 [GlideCue Remote](https://appstoreconnect.apple.com/apps/6839361565/distribution)（6839361565），主语言英语（美国）。本次仅准备 iPhone，主 Bundle ID 为 `cn.zhaodk.glidecue`。
 
 ## 三端基础操作与后续优先级
 
@@ -24,9 +24,9 @@ Watch 现有协议需要 Mac 对每次连接明确批准，和 iPhone 的密钥�
 
 ## 英文审核备注草稿
 
-> AirPointer Remote uses Bluetooth to control the system pointer on a nearby Mac. The macOS app is the receiver, and either the iPhone app or the independent Apple Watch app can act as a controller. No account is required.
+> GlideCue Remote uses Bluetooth to control the system pointer on a nearby Mac. The macOS app is the receiver, and either the iPhone app or the independent Apple Watch app can act as a controller. No account is required.
 >
-> Open AirPointer Remote on the Mac and find its menu bar icon. Open Accessibility Settings from that menu and allow pointer control. Turn on Bluetooth on both devices. On iPhone, select the Mac and confirm the matching code on both devices. On Apple Watch, select the Mac and approve the connection on the Mac. Test pointer movement, click, drag, and scrolling. To stop control, use Stop All Control in the Mac menu.
+> Open GlideCue Remote on the Mac and find its menu bar icon. Open Accessibility Settings from that menu and allow pointer control. Turn on Bluetooth on both devices. On iPhone, select the Mac and confirm the matching code on both devices. On Apple Watch, select the Mac and approve the connection on the Mac. Test pointer movement, click, drag, and scrolling. To stop control, use Stop All Control in the Mac menu.
 
 补上实测机型与系统、视频链接和审核联系方式后再提交。隐私政策与支持页需要真实可访问的公开 URL。英文底稿见 [Privacy Policy](privacy-policy-draft.md) 和 [Support](support-draft.md)，发布前补上可用的联系渠道。
 

@@ -11,7 +11,7 @@ struct DesktopWorkspace: View {
     let disconnect: () -> Void
     @AppStorage("linked.autoPictureInPicture") private var automaticPiP = true
 
-    private enum Panel { case controls, display, quality, tools, shortcuts, modifiers, arrows, info }
+    private enum Panel { case controls, input, display, quality, tools, shortcuts, modifiers, arrows, info }
     @Environment(\.verticalSizeClass) private var verticalSize
     @State private var immersive = false
     private var split: Bool { !adaptive && verticalSize != .compact && !immersive }
@@ -23,7 +23,7 @@ struct DesktopWorkspace: View {
     @State private var keyboard = false
     @State private var draft = ""
     @State private var adaptiveCollapsed = false
-    @State private var collapsed = true
+    @State private var collapsed = false
     @State private var observing = false
     @State private var dragObjects = false
     @State private var statistics = false
@@ -65,9 +65,8 @@ struct DesktopWorkspace: View {
                         HStack {
                             dockButton("ellipsis.circle", "Session Settings") { toggle(.controls) }
                             Spacer()
-                            pictureInPictureButton
                             dockButton("arrow.up.left.and.arrow.down.right", "Full Screen") { immersive = true }
-                            dockButton("keyboard", "Keyboard", active: keyboard) { toggleKeyboard() }.disabled(observing)
+                            dockButton("keyboard", keyboard ? "Hide Keyboard" : "Show Keyboard", active: keyboard) { toggleKeyboard() }.disabled(observing)
                         }.padding(.horizontal)
                         if keyboard { composer; Spacer(minLength: 0) }
                         else { padView.disabled(observing) }
@@ -111,7 +110,12 @@ struct DesktopWorkspace: View {
                 }
             }
             .overlay(alignment: .topLeading) {
-                if statistics {
+                if observing && panel == nil {
+                    Button("Observe only · Resume control") { observing = false }
+                        .buttonStyle(.borderedProminent)
+                        .padding(.top, split ? 44 : 8)
+                        .padding(.leading, 8)
+                } else if statistics {
                     Label(session.resolution.isEmpty ? "VNC" : "VNC · " + session.resolution, systemImage: "waveform")
                         .font(.caption.monospacedDigit()).padding(9).background(.regularMaterial, in: Capsule())
                         .padding(12).allowsHitTesting(false)
@@ -169,10 +173,10 @@ struct DesktopWorkspace: View {
         VStack(spacing: 6) {
             MirrorPad(session: session)
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
-                .overlay { Text("单指移动指针 · 双指滚动").font(.caption).foregroundStyle(.secondary).allowsHitTesting(false) }
+                .overlay { Text("One finger to move · Two to scroll").font(.caption).foregroundStyle(.secondary).allowsHitTesting(false) }
             HStack {
-                mouseButton("左键", 1)
-                mouseButton("右键", 4)
+                mouseButton(String(localized: "Left Click"), 1)
+                mouseButton(String(localized: "Right Click"), 4)
             }
         }.padding(.horizontal, 12).padding(.bottom, 4)
     }
@@ -193,7 +197,7 @@ struct DesktopWorkspace: View {
             if !adaptiveCollapsed {
                 dockButton("macwindow.on.rectangle", "App Windows") { session.send(key: 0xff54, modifiers: [control]) }
                     .disabled(observing)
-                dockButton("keyboard", "Keyboard", active: keyboard) { toggleKeyboard() }
+                dockButton("keyboard", keyboard ? "Hide Keyboard" : "Show Keyboard", active: keyboard) { toggleKeyboard() }
                     .disabled(observing)
                 dockButton("command", "Modifier Keys", active: panel == .modifiers) { toggle(.modifiers) }
                     .disabled(observing)
@@ -214,30 +218,18 @@ struct DesktopWorkspace: View {
                 keyboard = false
                 composing = false
             }
-            pictureInPictureButton
-            if immersive { dockButton("rectangle.split.1x2", "Trackpad") { immersive = false } }
-            if !collapsed {
-                dockButton("keyboard", "Keyboard", active: keyboard) { toggleKeyboard() }
-                    .disabled(observing)
-                dockButton("command", "Modifier Keys", active: panel == .modifiers) { toggle(.modifiers) }
-                    .disabled(observing)
-                dockButton("escape", "Escape") { key(0xff1b) }.disabled(observing)
-                dockButton("arrow.up.and.down.and.arrow.left.and.right", "Direction Keys", active: panel == .arrows) { toggle(.arrows) }
-                    .disabled(observing)
-                dockButton("square.grid.2x2", "Shortcuts", active: panel == .shortcuts) { toggle(.shortcuts) }
-                    .disabled(observing)
-                dockButton("slider.horizontal.3", "Session Settings", active: panel == .controls) { toggle(.controls) }
+            if immersive && verticalSize != .compact {
+                dockButton("rectangle.split.1x2", "Return to trackpad") { immersive = false }
             }
+            if !collapsed {
+                dockButton("keyboard", keyboard ? "Hide Keyboard" : "Show Keyboard", active: keyboard) { toggleKeyboard() }
+                    .disabled(observing)
+            }
+            dockButton("ellipsis.circle", "Session Settings", active: panel == .controls) { toggle(.controls) }
         }
         .padding(5)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.14)))
+        .modifier(WorkspaceToolbarMaterial())
         .fixedSize(horizontal: true, vertical: false)
-    }
-
-    private var pictureInPictureButton: some View {
-        dockButton("pip.enter", "Picture in Picture", active: session.pictureInPicture.active) { session.pictureInPicture.start() }
-            .disabled(!session.pictureInPicture.possible || session.pictureInPicture.active)
     }
 
     private func dockButton(_ icon: String, _ name: LocalizedStringKey, active: Bool = false,
@@ -245,7 +237,7 @@ struct DesktopWorkspace: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .medium))
-                .frame(width: 41, height: 44)
+                .frame(width: 44, height: 44)
                 .foregroundStyle(active ? cyan : .primary)
                 .background(active ? cyan.opacity(0.13) : .clear, in: RoundedRectangle(cornerRadius: 11))
         }.buttonStyle(.plain).accessibilityLabel(Text(name))
@@ -255,9 +247,7 @@ struct DesktopWorkspace: View {
         HStack {
             TextField("Type on Mac", text: $draft)
                 .focused($composing).onAppear { composing = true }.submitLabel(.send).onSubmit(sendDraft)
-            Button("Send", action: sendDraft).disabled(draft.isEmpty)
-            Button { key(0xff08) } label: { Image(systemName: "delete.left") }.accessibilityLabel("Backspace")
-            Button { key(0xff0d) } label: { Image(systemName: "return") }.accessibilityLabel("Return")
+            Button("Send to Mac", action: sendDraft).disabled(draft.isEmpty)
         }
         .padding(.horizontal, 12).frame(minHeight: 48)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
@@ -278,17 +268,23 @@ struct DesktopWorkspace: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 if active != .controls {
-                    Button { panel = .controls } label: { Image(systemName: "chevron.left").frame(width: 36, height: 36) }
+                    Button { panel = .controls } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
                         .accessibilityLabel("Session Settings")
                 }
                 Text(title(active)).font(.headline)
                 Spacer()
-                Button { panel = nil } label: { Image(systemName: "xmark").frame(width: 36, height: 36) }
+                Button { panel = nil } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
                     .accessibilityLabel("Close")
             }.buttonStyle(.plain)
             switch active {
             case .controls:
+                Button("Picture in Picture", systemImage: "pip.enter") { session.pictureInPicture.start() }
+                    .disabled(!session.pictureInPicture.possible || session.pictureInPicture.active)
+                if !session.pictureInPicture.possible && !session.pictureInPicture.active {
+                    Text("Picture in Picture is unavailable right now.").font(.footnote).foregroundStyle(.secondary)
+                }
                 Toggle("Start PiP on Home", isOn: $automaticPiP)
+                setting("Control Mode", icon: "hand.point.up.left", next: .input)
                 setting("Display", icon: "aspectratio", next: .display)
                 setting("Picture Quality", icon: "photo", next: .quality)
                 setting("Tools", icon: "wrench.and.screwdriver", next: .tools)
@@ -297,29 +293,31 @@ struct DesktopWorkspace: View {
                     setting("Modifier Keys", icon: "option", next: .modifiers)
                     setting("Direction Keys", icon: "arrow.left.and.right", next: .arrows)
                 }
-                Divider()
-                Button("Disconnect", systemImage: "power", role: .destructive, action: disconnect)
-                    .frame(minHeight: 42)
+                if !split && !adaptive {
+                    Divider()
+                    Button("Disconnect", systemImage: "power", role: .destructive, action: disconnect)
+                        .frame(minHeight: 44)
+                }
             case .display:
                 choice("Fit Entire Screen", value: "fit", current: layout)
                 choice("Fill Screen", value: "fill", current: layout)
                 choice("Original Size", value: "actual", current: layout)
                 Text("Pinch to zoom. Drag with two fingers to move the enlarged view.")
                     .font(.footnote).foregroundStyle(.secondary)
-                Divider()
-                Toggle("拖动窗口或文件", isOn: $dragObjects).disabled(observing)
+            case .input:
+                Toggle("Drag Windows or Files", isOn: $dragObjects).disabled(observing)
                 Toggle("Observe Only", isOn: $observing)
             case .quality:
                 choice("Data Saver", value: 3, current: $quality)
                 choice("Balanced", value: 6, current: $quality)
                 choice("Detail", value: 9, current: $quality)
             case .tools:
-                Button("Send Text", systemImage: "text.cursor") { panel = nil; toggleKeyboard(forceOpen: true) }
-                    .disabled(observing)
                 if !observing {
-                    PasteButton(payloadType: String.self) { values in
-                        if let text = values.first { session.sendClipboard(text) }
-                    }.labelStyle(.titleAndIcon)
+                    LabeledContent("Paste to Mac") {
+                        PasteButton(payloadType: String.self) { values in
+                            if let text = values.first { session.sendClipboard(text) }
+                        }.labelStyle(.iconOnly)
+                    }
                 }
                 Button("Capture and Share", systemImage: "camera") {
                     panel = nil
@@ -341,18 +339,22 @@ struct DesktopWorkspace: View {
                     shortcut("Show Desktop", 0xffc8)
                     shortcut("Spotlight", 32, [command])
                     shortcut("Switch App", 0xff09, [command])
-                    shortcut("Lock Screen", 113, [control, command])
                     shortcut("Previous Space", 0xff51, [control])
                     shortcut("Next Space", 0xff53, [control])
                     shortcut("Minimize", 109, [command])
-                    shortcut("Close Window", 119, [command])
-                    shortcut("Force Quit", 0xff1b, [option, command])
                     shortcut("Hide App", 104, [command])
                 }.disabled(observing)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4)) {
                     ForEach(1...12, id: \.self) { index in
                         tile(Text("F\(index)")) { key(0xffbd + index) }
                     }
+                }.disabled(observing)
+                Divider()
+                Text("System and window actions").font(.footnote).foregroundStyle(.secondary)
+                HStack {
+                    shortcut("Close Window", 119, [command])
+                    shortcut("Lock Screen", 113, [control, command])
+                    shortcut("Force Quit", 0xff1b, [option, command])
                 }.disabled(observing)
             case .modifiers:
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4)) {
@@ -364,6 +366,11 @@ struct DesktopWorkspace: View {
                 Text("Selected modifiers apply to the next key.").font(.footnote).foregroundStyle(.secondary)
                 shortcut("Tab", 0xff09)
             case .arrows:
+                HStack {
+                    shortcut("Backspace", 0xff08)
+                    shortcut("Return", 0xff0d)
+                    shortcut("Escape", 0xff1b)
+                }
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4)) {
                     shortcut("←", 0xff51)
                     shortcut("↑", 0xff52)
@@ -381,6 +388,7 @@ struct DesktopWorkspace: View {
     private func title(_ panel: Panel) -> LocalizedStringKey {
         switch panel {
         case .controls: "Session Settings"
+        case .input: "Control Mode"
         case .display: "Display"
         case .quality: "Picture Quality"
         case .tools: "Tools"
@@ -397,7 +405,7 @@ struct DesktopWorkspace: View {
                 Label(title, systemImage: icon)
                 Spacer()
                 Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary)
-            }.frame(minHeight: 34).contentShape(Rectangle())
+            }.frame(minHeight: 44).contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
 
@@ -407,20 +415,20 @@ struct DesktopWorkspace: View {
                 Text(title)
                 Spacer()
                 if current.wrappedValue == value { Image(systemName: "checkmark").foregroundStyle(cyan) }
-            }.frame(minHeight: 36).contentShape(Rectangle())
+            }.frame(minHeight: 44).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityAddTraits(current.wrappedValue == value ? .isSelected : [])
     }
 
     private func tile(_ title: Text, selected: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             title.font(.footnote.weight(.medium)).multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity, minHeight: 40)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(selected ? cyan.opacity(0.24) : .white.opacity(0.09), in: RoundedRectangle(cornerRadius: 8))
         }.buttonStyle(.plain)
     }
 
     private func modifier(_ symbol: String, _ code: Int, label: LocalizedStringKey) -> some View {
-        tile(Text(symbol), selected: modifiers.contains(code)) {
+        tile(Text(modifiers.contains(code) ? "✓ " + symbol : symbol), selected: modifiers.contains(code)) {
             if !modifiers.insert(code).inserted { modifiers.remove(code) }
         }.accessibilityLabel(Text(label)).accessibilityAddTraits(modifiers.contains(code) ? .isSelected : [])
     }
@@ -715,5 +723,19 @@ private struct MirrorMouseButton: UIViewRepresentable {
     func updateUIView(_ button: UIButton, context: Context) {}
     static func dismantleUIView(_ button: UIButton, coordinator: ()) {
         button.sendActions(for: .touchCancel)
+    }
+}
+
+private struct WorkspaceToolbarMaterial: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if reduceTransparency {
+            content.background(Color(uiColor: .secondarySystemBackground), in: Capsule())
+        } else if #available(iOS 26, *) {
+            content.glassEffect(.regular, in: .capsule)
+        } else {
+            content.background(.regularMaterial, in: Capsule())
+        }
     }
 }

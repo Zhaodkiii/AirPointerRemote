@@ -19,15 +19,15 @@ if [[ $# -gt 1 ]]; then
 fi
 case "$edition" in
     --direct)
-        scheme='AirPointer Remote Mac Direct'
-        product='AirPointerRemoteMacDirect.app'
-        app_name='AirPointer Remote Direct.app'
+        scheme='GlideCue Remote Mac Direct'
+        product='GlideCueRemoteMacDirect.app'
+        app_name='GlideCue Remote Direct.app'
         edition_suffix='-Direct'
         ;;
     --standard)
-        scheme='AirPointer Remote Mac'
-        product='AirPointerRemoteMac.app'
-        app_name='AirPointer Remote.app'
+        scheme='GlideCue Remote Mac'
+        product='GlideCueRemoteMac.app'
+        app_name='GlideCue Remote.app'
         edition_suffix=''
         ;;
     *)
@@ -48,10 +48,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-archive="$work_dir/AirPointerRemote.xcarchive"
+archive="$work_dir/GlideCueRemote.xcarchive"
 app="$archive/Products/Applications/$product"
 echo "Archiving Mac Release for Apple silicon and Intel…"
-xcodebuild -quiet -project "$project_dir/AirPointerRemote.xcodeproj" \
+xcodebuild -quiet -project "$project_dir/GlideCueRemote.xcodeproj" \
     -scheme "$scheme" -configuration Release -destination 'generic/platform=macOS' \
     -archivePath "$archive" -derivedDataPath "$output_dir/Build" \
     ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGN_STYLE=Manual \
@@ -101,11 +101,11 @@ fi
 mkdir -p "$work_dir/contents" "$work_dir/mount"
 ditto "$app" "$work_dir/contents/$app_name"
 xcrun swift "$project_dir/scripts/dmg-background.swift" "$work_dir/install.png"
-filename="AirPointer-Remote-${version}-${build}-macOS${edition_suffix}${suffix}.dmg"
+filename="GlideCue-Remote-${version}-${build}-macOS${edition_suffix}${suffix}.dmg"
 image="$work_dir/$filename"
 "$tools_dir/bin/python" -m dmgbuild -s "$project_dir/scripts/dmg-layout.py" \
     -D "app=$work_dir/contents/$app_name" -D "background=$work_dir/install.png" \
-    'AirPointer Remote' "$image"
+    'GlideCue Remote' "$image"
 codesign --sign "$signing_identity" --identifier "$bundle_id.dmg" --timestamp "$image"
 
 if [[ -n "$notary_profile" ]]; then
@@ -148,7 +148,7 @@ mounted=""
 mv -f "$image" "$output_dir/$filename"
 echo "DMG: $output_dir/$filename"
 if [[ "$edition" == --standard ]]; then
-    installer="$project_dir/iPhone/Resources/AirPointer Remote for Mac.dmg"
+    installer="$project_dir/iPhone/Resources/GlideCue Remote for Mac.dmg"
     cp "$output_dir/$filename" "$work_dir/embedded.dmg"
     mv -f "$work_dir/embedded.dmg" "$installer"
     echo "Updated iPhone resource: $installer"

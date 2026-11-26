@@ -9,7 +9,7 @@ import SystemConfiguration
 /// ends the session, disconnects, or stops renewing it.
 private final class PowerManager {
     private let directory = "/private/var/run/com.daokaihua.liddesktop"
-    private let recoveryFile = "/private/var/db/com.daokaihua.airpointerremote.direct.sleep"
+    private let recoveryFile = "/private/var/db/cn.zhaodk.glidecue.direct.sleep"
     private let log = Logger(subsystem: LidPowerService.identifier, category: "Power")
     private var owner: UUID?
     private var renewedAt: TimeInterval = 0
@@ -199,7 +199,7 @@ private final class Daemon: NSObject, NSXPCListenerDelegate {
 guard geteuid() == 0 else { exit(EXIT_FAILURE) }
 private let daemon = Daemon()
 let listener = NSXPCListener(machServiceName: LidPowerService.identifier)
-listener.setConnectionCodeSigningRequirement(#"anchor apple generic and identifier "com.daokaihua.airpointerremote.direct" and certificate leaf[subject.OU] = "4AN6PV98G7""#)
+listener.setConnectionCodeSigningRequirement(#"anchor apple generic and identifier "cn.zhaodk.glidecue.direct" and certificate leaf[subject.OU] = "4AN6PV98G7""#)
 listener.delegate = daemon
 listener.resume()
 let watchdog = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in daemon.manager.tick() }

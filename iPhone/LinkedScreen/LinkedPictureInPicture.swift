@@ -8,7 +8,7 @@ final class LinkedPictureInPicture: NSObject, AVPictureInPictureControllerDelega
 
     private weak var client: LinkedClient?
     private var controller: AVPictureInPictureController!
-    private let log = Logger(subsystem: "com.daokaihua.airpointerremote", category: "LinkedPiP")
+    private let log = Logger(subsystem: "cn.zhaodk.glidecue", category: "LinkedPiP")
     private var observation: NSKeyValueObservation?
     private var startDeadline: DispatchWorkItem?
     private var transitionTask: UIBackgroundTaskIdentifier = .invalid

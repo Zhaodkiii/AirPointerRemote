@@ -3,7 +3,7 @@
 "Air Mouse" = "Air Mouse";
 "Air Mouse and Hybrid" = "Air Mouse and Hybrid";
 "Air mouse sensitivity %.1f" = "Air mouse sensitivity %.1f";
-"Allow Bluetooth for AirPointer Remote in iPhone Settings." = "Allow Bluetooth for AirPointer Remote in iPhone Settings.";
+"Allow Bluetooth for GlideCue Remote in iPhone Settings." = "Allow Bluetooth for GlideCue Remote in iPhone Settings.";
 "Allow Screen Recording on the Mac to restore Lid Desktop after closing the lid." = "Allow Screen Recording on the Mac to restore Lid Desktop after closing the lid.";
 "Already installed? Choose Your Mac" = "Already installed? Choose Your Mac";
 "Also applies below the shared display. Page navigation takes over horizontal scrolling. Zoom, rotation and navigation use commands available in the active Mac app." = "Also applies below the shared display. Page navigation takes over horizontal scrolling. Zoom, rotation and navigation use commands available in the active Mac app.";
@@ -49,7 +49,7 @@
 "Control paused on the Mac." = "Control paused on the Mac.";
 "Control stopped. Select the Mac to reconnect." = "Control stopped. Select the Mac to reconnect.";
 "Could not access secure storage. Reopen the app and try again." = "Could not access secure storage. Reopen the app and try again.";
-"Could not find AirPointer Remote on this Mac. Open the Mac app and try again." = "Could not find AirPointer Remote on this Mac. Open the Mac app and try again.";
+"Could not find GlideCue Remote on this Mac. Open the Mac app and try again." = "Could not find GlideCue Remote on this Mac. Open the Mac app and try again.";
 "Could not save the device identity. Check app signing and keychain access." = "Could not save the device identity. Check app signing and keychain access.";
 "Could not save this pairing on iPhone. Try again." = "Could not save this pairing on iPhone. Try again.";
 "Couldn’t share the installer" = "Couldn’t share the installer";
@@ -63,7 +63,7 @@
 "Display selection cancelled." = "Display selection cancelled.";
 "Display unavailable. Open the lid or reconnect a display." = "Display unavailable. Open the lid or reconnect a display.";
 "Done" = "Done";
-"Drag AirPointer Remote into Applications." = "Drag AirPointer Remote into Applications.";
+"Drag GlideCue Remote into Applications." = "Drag GlideCue Remote into Applications.";
 "Drag on Display" = "Drag on Display";
 "Edit Selected Mac Text" = "Edit Selected Mac Text";
 "Edit rejected. Check the Mac field and selection." = "Edit rejected. Check the Mac field and selection.";
@@ -87,7 +87,7 @@
 "Hold to Move" = "Hold to Move";
 "How to Use" = "How to Use";
 "Hybrid" = "Hybrid";
-"If connected but the pointer does not move, open System Settings → Privacy & Security → Accessibility on the Mac and enable AirPointer Remote." = "If connected but the pointer does not move, open System Settings → Privacy & Security → Accessibility on the Mac and enable AirPointer Remote.";
+"If connected but the pointer does not move, open System Settings → Privacy & Security → Accessibility on the Mac and enable GlideCue Remote." = "If connected but the pointer does not move, open System Settings → Privacy & Security → Accessibility on the Mac and enable GlideCue Remote.";
 "If the code matches your Mac, confirm on both devices." = "If the code matches your Mac, confirm on both devices.";
 "Inertial Scrolling" = "Inertial Scrolling";
 "Insert on Mac" = "Insert on Mac";
@@ -117,10 +117,10 @@
 "Next" = "Next";
 "No display available." = "No display available.";
 "OK" = "OK";
-"On the Mac, allow AirPointer Remote in System Settings → Privacy & Security → Accessibility." = "On the Mac, allow AirPointer Remote in System Settings → Privacy & Security → Accessibility.";
+"On the Mac, allow GlideCue Remote in System Settings → Privacy & Security → Accessibility." = "On the Mac, allow GlideCue Remote in System Settings → Privacy & Security → Accessibility.";
 "One finger to move · Two to scroll" = "One finger to move · Two to scroll";
 "Only continue if you recognize this Mac. You'll need to compare a new pairing code on both devices." = "Only continue if you recognize this Mac. You'll need to compare a new pairing code on both devices.";
-"Open AirPointer Remote on your Mac. Allow Bluetooth and Accessibility on the Mac, then select it below." = "Open AirPointer Remote on your Mac. Allow Bluetooth and Accessibility on the Mac, then select it below.";
+"Open GlideCue Remote on your Mac. Allow Bluetooth and Accessibility on the Mac, then select it below." = "Open GlideCue Remote on your Mac. Allow Bluetooth and Accessibility on the Mac, then select it below.";
 "Open iPhone Settings" = "Open iPhone Settings";
 "Open the Mac app, then select your Mac on iPhone." = "Open the Mac app, then select your Mac on iPhone.";
 "Open the Mac lid or wake its external display. Sharing will be requested when the paired Mac reconnects." = "Open the Mac lid or wake its external display. Sharing will be requested when the paired Mac reconnects.";
@@ -136,7 +136,7 @@
 "Point the top of your iPhone at the Mac." = "Point the top of your iPhone at the Mac.";
 "Point the top of your iPhone at the Mac. Hold Move and turn or tilt your phone. Release to adjust your grip. In Hybrid mode, use the trackpad for fine adjustments." = "Point the top of your iPhone at the Mac. Hold Move and turn or tilt your phone. Release to adjust your grip. In Hybrid mode, use the trackpad for fine adjustments.";
 "Pointer" = "Pointer";
-"Pointer and motion input use Bluetooth. Linked Screen uses an encrypted local network connection to the paired Mac for video, pointer input and text. AirPointer Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu." = "Pointer and motion input use Bluetooth. Linked Screen uses an encrypted local network connection to the paired Mac for video, pointer input and text. AirPointer Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu.";
+"Pointer and motion input use Bluetooth. Linked Screen uses an encrypted local network connection to the paired Mac for video, pointer input and text. GlideCue Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu." = "Pointer and motion input use Bluetooth. Linked Screen uses an encrypted local network connection to the paired Mac for video, pointer input and text. GlideCue Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu.";
 "Preparing Bluetooth…" = "Preparing Bluetooth…";
 "Previous" = "Previous";
 "Privacy" = "Privacy";
@@ -211,7 +211,7 @@
 "Two-Finger Swipe from Right Edge for Notifications" = "Two-Finger Swipe from Right Edge for Notifications";
 "Type on Mac…" = "Type on Mac…";
 "Unsupported sharing message." = "Unsupported sharing message.";
-"Update AirPointer Remote on the Mac, then try again." = "Update AirPointer Remote on the Mac, then try again.";
+"Update GlideCue Remote on the Mac, then try again." = "Update GlideCue Remote on the Mac, then try again.";
 "Update AirPointer on your Mac for Picture in Picture." = "Update AirPointer on your Mac for Picture in Picture.";
 "Update the Mac receiver for formatted text." = "Update the Mac receiver for formatted text.";
 "Use New Field" = "Use New Field";
@@ -235,3 +235,23 @@
 "The Mac did not establish a high-performance desktop at the iPhone’s aspect ratio." = "The Mac did not establish a high-performance desktop at the iPhone’s aspect ratio.";
 "The Mac disconnected." = "The Mac disconnected.";
 "High-performance screen sharing ended." = "High-performance screen sharing ended.";
+
+"Mirroring shows the same desktop on your Mac and iPhone." = "Mirroring shows the same desktop on your Mac and iPhone.";
+"A private desktop fits your iPhone. The Mac display goes dark until you disconnect." = "A private desktop fits your iPhone. The Mac display goes dark until you disconnect.";
+"Enter a host name or IP address, optionally followed by a port from 1 to 65535." = "Enter a host name or IP address, optionally followed by a port from 1 to 65535.";
+"Remove the saved sign-in for %@ from this iPhone?" = "Remove the saved sign-in for %@ from this iPhone?";
+"Switch to mirroring" = "Switch to mirroring";
+"Signed in. Waiting for the desktop…" = "Signed in. Waiting for the desktop…";
+"This Mac does not offer the authentication method required for a private desktop." = "This Mac does not offer the authentication method required for a private desktop.";
+"Check your Mac username, password and Screen Sharing access." = "Check your Mac username, password and Screen Sharing access.";
+"Companion Remote" = "Companion Remote";
+"Observe only · Resume control" = "Observe only · Resume control";
+"Return to trackpad" = "Return to trackpad";
+"Picture in Picture is unavailable right now." = "Picture in Picture is unavailable right now.";
+"Paste to Mac" = "Paste to Mac";
+"Send to Mac" = "Send to Mac";
+"Trackpad speed" = "Trackpad speed";
+"Air mouse sensitivity" = "Air mouse sensitivity";
+"Show Keyboard" = "Show Keyboard";
+
+"System and window actions" = "System and window actions";

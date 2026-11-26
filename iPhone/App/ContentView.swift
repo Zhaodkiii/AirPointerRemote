@@ -8,10 +8,11 @@ struct ContentView: View {
     @State private var inlineRequested = false
     @State private var linkedScreen = false
     @AppStorage("linked.autoPictureInPicture") private var automaticPiP = true
-    @State private var systemDesktop = false
+    @State private var systemDesktop = true
     @State private var settings = false
     @State private var showHelp = false
     @State private var showSetup = false
+    @State private var confirmForgetPairing = false
     @State private var confirmNewIdentity = false
 
     @AppStorage("pad.zoom") private var zoomGesture = true
@@ -41,7 +42,7 @@ struct ContentView: View {
             }
             .padding(inlineWorkspace ? 0 : 16)
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("AirPointer Remote")
+            .navigationTitle("GlideCue Remote")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(inlineWorkspace ? .hidden : .visible, for: .navigationBar)
             .toolbar {
@@ -232,51 +233,11 @@ struct ContentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Connect to a Mac").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) { connectionChoices }
-                    VStack(spacing: 10) { connectionChoices }
-                }
-                if systemDesktop {
-                    SystemDesktopHome(connection: connection)
-                } else { devices }
+                SystemDesktopHome(connection: connection)
             }
             .padding(.vertical, 8)
         }
         .scrollDismissesKeyboard(.interactively)
-    }
-
-    @ViewBuilder private var connectionChoices: some View {
-        connectionChoice("Bluetooth Remote", subtitle: "Trackpad and air mouse", icon: "cursorarrow.motionlines", desktop: false)
-        connectionChoice("Built-in Screen Sharing", subtitle: "View and control the desktop", icon: "desktopcomputer", desktop: true)
-    }
-
-    private func connectionChoice(_ title: LocalizedStringKey, subtitle: LocalizedStringKey,
-                                  icon: String, desktop: Bool) -> some View {
-        let selected = systemDesktop == desktop
-        return Button {
-            if desktop { selectSystemDesktop() } else { systemDesktop = false }
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: icon).font(.title3)
-                    Spacer(minLength: 8)
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selected ? Color.accentColor : .secondary)
-                        .accessibilityHidden(true)
-                }
-                .foregroundStyle(Color.accentColor)
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(minWidth: 122, maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(selected ? Color.accentColor : .clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func selectSystemDesktop() {
@@ -291,7 +252,7 @@ struct ContentView: View {
     private var devices: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Nearby Macs").font(.headline).accessibilityAddTraits(.isHeader)
-            Text("Open AirPointer Remote on your Mac. Allow Bluetooth and Accessibility on the Mac, then select it below.")
+            Text("Open GlideCue Remote on your Mac. Allow Bluetooth and Accessibility on the Mac, then select it below.")
                 .font(.subheadline).foregroundStyle(.secondary)
             if let code = connection.pairingCode {
                 VStack(spacing: 12) {
@@ -407,30 +368,41 @@ struct ContentView: View {
     private var settingsView: some View {
         NavigationStack {
             Form {
-                Section("Pointer") {
-                    Text("Trackpad speed \(controller.touchSpeed, specifier: "%.1f")")
-                    Slider(value: $controller.touchSpeed, in: 0.3...4)
-                    Text("Air mouse sensitivity \(controller.airSpeed, specifier: "%.1f")")
-                    Slider(value: $controller.airSpeed, in: 0.2...3)
+                if systemDesktop {
+                    Toggle("Start PiP on Home", isOn: $automaticPiP)
+                } else {
+                    Section("Pointer") {
+                        Text("Trackpad speed \(controller.touchSpeed, specifier: "%.1f")")
+                        Slider(value: $controller.touchSpeed, in: 0.3...4).accessibilityLabel("Trackpad speed")
+                        Text("Air mouse sensitivity \(controller.airSpeed, specifier: "%.1f")")
+                        Slider(value: $controller.airSpeed, in: 0.2...3).accessibilityLabel("Air mouse sensitivity")
+                    }
+                    Section("Scrolling") {
+                        Toggle("Natural Scrolling", isOn: $controller.naturalScroll)
+                        Toggle("Inertial Scrolling", isOn: $controller.inertia)
+                    }
+                    Section("Mac Gestures") {
+                        Toggle("Pinch to Zoom", isOn: $zoomGesture)
+                        Toggle("Two-Finger Double Tap to Fit or Reset Zoom", isOn: $fitGesture)
+                        Toggle("Two-Finger Rotation", isOn: $rotateGesture)
+                        Toggle("Two-Finger Horizontal Swipe to Navigate", isOn: $pagesGesture)
+                        Toggle("Two-Finger Swipe from Right Edge for Notifications", isOn: $notificationsGesture)
+                        Toggle("Three-Finger Swipes for Spaces and Windows", isOn: $spacesGesture)
+                        Toggle("Four-Finger Pinch for Apps or Spread for Desktop", isOn: $fourGesture)
+                        Text("Also applies below the shared display. Page navigation takes over horizontal scrolling. Zoom, rotation and navigation use commands available in the active Mac app.")
+                    }
+                    Section("Connection") {
+                        Button("Forget Paired Mac", role: .destructive) { confirmForgetPairing = true }
+                    }
                 }
-                Section("Scrolling") {
-                    Toggle("Natural Scrolling", isOn: $controller.naturalScroll)
-                    Toggle("Inertial Scrolling", isOn: $controller.inertia)
-                }
-                Section("Mac Gestures") {
-                    Toggle("Pinch to Zoom", isOn: $zoomGesture)
-                    Toggle("Two-Finger Double Tap to Fit or Reset Zoom", isOn: $fitGesture)
-                    Toggle("Two-Finger Rotation", isOn: $rotateGesture)
-                    Toggle("Two-Finger Horizontal Swipe to Navigate", isOn: $pagesGesture)
-                    Toggle("Two-Finger Swipe from Right Edge for Notifications", isOn: $notificationsGesture)
-                    Toggle("Three-Finger Swipes for Spaces and Windows", isOn: $spacesGesture)
-                    Toggle("Four-Finger Pinch for Apps or Spread for Desktop", isOn: $fourGesture)
-                    Text("Also applies below the shared display. Page navigation takes over horizontal scrolling. Zoom, rotation and navigation use commands available in the active Mac app.")
-                }
-                Section("Connection") {
-                    Button("Forget Paired Mac", role: .destructive) { controller.stop(); connection.forget(); settings = false }
+                Section("Support & Privacy") {
+                    Link("Get Support", destination: URL(string: "https://airpointer-remote-support.kt5gs9vtd2.chatgpt.site/glidecue/support/")!)
+                    Link("Privacy Policy", destination: URL(string: "https://airpointer-remote-support.kt5gs9vtd2.chatgpt.site/glidecue/privacy/")!)
                 }
             }
+            .confirmationDialog("Forget Paired Mac", isPresented: $confirmForgetPairing, titleVisibility: .visible) {
+                Button("Forget Paired Mac", role: .destructive) { controller.stop(); connection.forget(); settings = false }
+            } message: { Text(connection.macName) }
             .navigationTitle("Settings")
             .toolbar { Button("Done") { settings = false } }
         }
@@ -439,25 +411,38 @@ struct ContentView: View {
     private var helpView: some View {
         NavigationStack {
             List {
-                Section { NavigationLink("Mac Setup Guide") { setupGuide } }
-                Section("Trackpad") {
-                    Text("Slide one finger to move the pointer. Tap to click, double-tap to double-click, or tap with two fingers to right-click.")
-                    Text("Slide two fingers to scroll. To drag, hold Left Click while moving another finger on the trackpad, or tap once and then touch and hold.")
-                }
-                Section("Air Mouse and Hybrid") {
-                    Text("Point the top of your iPhone at the Mac. Hold Move and turn or tilt your phone. Release to adjust your grip. In Hybrid mode, use the trackpad for fine adjustments.")
-                    Text("Recenter moves the pointer to the center of its display. Precision slows movement. Continuous keeps motion control active after you release Move.")
-                }
-                Section("Screen Sharing") {
-                    Text("Tap Share next to your Mac to see its desktop above the trackpad. You can keep using the pointer while choosing a display on the Mac. Tap Stop to return to your previous control mode.")
-                    Text("The display icon in the top toolbar opens the separate Linked Screen view.")
-                }
-                Section("Privacy") {
-                    Text("Pointer and motion input use Bluetooth. Linked Screen uses an encrypted local network connection to the paired Mac for video, pointer input and text. AirPointer Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu.")
-                }
-                Section("Stopping Control and Permissions") {
-                    Text("Leaving the app or locking iPhone stops control. Use the Mac menu bar to pause, revoke pairings, or quit. The emergency shortcut is Control + Option + Command + Period.")
-                    Text("If connected but the pointer does not move, open System Settings → Privacy & Security → Accessibility on the Mac and enable AirPointer Remote.")
+                if systemDesktop {
+                    Section("Set Up Screen Sharing on Your Mac") {
+                        Text("On your Mac, open System Settings → General → Sharing and turn on Screen Sharing. Allow your Mac account in the service settings. For a VNC password, enable password control there. Connect both devices to the same trusted network.")
+                    }
+                    Section("Desktop Mode") {
+                        Text("A private desktop fits your iPhone. The Mac display goes dark until you disconnect.")
+                        Text("Mirroring shows the same desktop on your Mac and iPhone.")
+                    }
+                    Section("Companion Remote") {
+                        NavigationLink("Mac Setup Guide") { setupGuide }
+                    }
+                } else {
+                    Section { NavigationLink("Mac Setup Guide") { setupGuide } }
+                    Section("Trackpad") {
+                        Text("Slide one finger to move the pointer. Tap to click, double-tap to double-click, or tap with two fingers to right-click.")
+                        Text("Slide two fingers to scroll. To drag, hold Left Click while moving another finger on the trackpad, or tap once and then touch and hold.")
+                    }
+                    Section("Air Mouse and Hybrid") {
+                        Text("Point the top of your iPhone at the Mac. Hold Move and turn or tilt your phone. Release to adjust your grip. In Hybrid mode, use the trackpad for fine adjustments.")
+                        Text("Recenter moves the pointer to the center of its display. Precision slows movement. Continuous keeps motion control active after you release Move.")
+                    }
+                    Section("Screen Sharing") {
+                        Text("Tap Share next to your Mac to see its desktop above the trackpad. You can keep using the pointer while choosing a display on the Mac. Tap Stop to return to your previous control mode.")
+                        Text("The display icon in the top toolbar opens the separate Linked Screen view.")
+                    }
+                    Section("Privacy") {
+                        Text("Pointer and motion input use Bluetooth. Linked Screen uses an encrypted local network connection to the paired Mac for video, pointer input and text. GlideCue Remote has no account or analytics. Pairing information is stored on your devices. You can remove it in this app’s Settings and in the Mac menu.")
+                    }
+                    Section("Stopping Control and Permissions") {
+                        Text("Leaving the app or locking iPhone stops control. Use the Mac menu bar to pause, revoke pairings, or quit. The emergency shortcut is Control + Option + Command + Period.")
+                        Text("If connected but the pointer does not move, open System Settings → Privacy & Security → Accessibility on the Mac and enable GlideCue Remote.")
+                    }
                 }
             }
             .navigationTitle("How to Use")

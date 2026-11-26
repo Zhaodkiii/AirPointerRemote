@@ -71,7 +71,7 @@ struct LinkedScreenView: View {
                             if let viewport { client.start(connection, adaptive: viewport) }
                         }
                         .buttonStyle(.borderedProminent).disabled(connection.macPaused || viewport == nil)
-                        Text("Requires AirPointer Remote Direct on the Mac.")
+                        Text("Requires GlideCue Remote Direct on the Mac.")
                             .font(.caption).foregroundStyle(.secondary)
                         if !preferAdaptive {
                             Button(client.canRetrySharing ? String(localized: "Resume Sharing") : String(localized: "Start Sharing")) { client.start(connection) }
@@ -273,9 +273,9 @@ struct LinkedWorkspace: View {
             if showPhonePad && !client.editing {
                 VStack(spacing: 4) {
                     HStack {
-                        Text("触控板").font(.caption)
+                        Text("Trackpad").font(.caption)
                         Spacer()
-                        Button("收起") { showPhonePad = false }
+                        Button("Hide") { showPhonePad = false }
                     }
                     LinkedCanvas(client: client, surface: .trackpad, drag: false)
                         .frame(height: 132)
@@ -323,7 +323,7 @@ struct LinkedWorkspace: View {
     private func adaptiveTools(buttonSize: CGFloat, travel: CGSize) -> some View {
         VStack(spacing: 5) {
             if toolsExpanded {
-                Button(showPhonePad ? "收起触控板" : "打开触控板") {
+                Button(showPhonePad ? "Hide Trackpad" : "Show Trackpad") {
                     showPhonePad.toggle()
                     if showPhonePad { toolsExpanded = false }
                 }.padding(8).background(.regularMaterial, in: Capsule())
@@ -338,8 +338,8 @@ struct LinkedWorkspace: View {
                 }
                 .padding(4).background(.regularMaterial, in: Capsule())
                 HStack(spacing: 8) {
-                    Button("Mac 全选 ⌘A") { client.desktopTool(.selectAll) }
-                    Button("Mac 复制 ⌘C") { client.desktopTool(.copy) }
+                    Button("Mac Select All ⌘A") { client.desktopTool(.selectAll) }
+                    Button("Mac Copy ⌘C") { client.desktopTool(.copy) }
                 }.font(.subheadline).padding(10).background(.regularMaterial, in: Capsule())
                 .disabled(!client.canPoint)
             }
@@ -349,8 +349,8 @@ struct LinkedWorkspace: View {
                     .contentShape(Rectangle())
                     .gesture(handleGesture(travel: travel))
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel(toolsExpanded ? "收起工具栏" : "展开工具栏")
-                    .accessibilityHint("拖动可移动工具栏")
+                    .accessibilityLabel(toolsExpanded ? "Collapse Toolbar" : "Expand Toolbar")
+                    .accessibilityHint("Drag to move the toolbar")
                     .accessibilityAction { togglePalette() }
                 if toolsExpanded {
                     if client.supportsDesktopTools {
@@ -360,7 +360,7 @@ struct LinkedWorkspace: View {
                             client.desktopTool(.windows)
                         } label: {
                             Image(systemName: "macwindow.on.rectangle").frame(width: buttonSize, height: buttonSize)
-                        }.disabled(!client.canPoint).accessibilityLabel("选择 Mac 窗口")
+                        }.disabled(!client.canPoint).accessibilityLabel("Choose a Mac Window")
                     }
                     Button {
                         if client.editing { client.hideKeyboard() } else { client.requestKeyboard() }
@@ -372,25 +372,25 @@ struct LinkedWorkspace: View {
                         Button { keysExpanded.toggle() } label: {
                             Image(systemName: "command").frame(width: buttonSize, height: buttonSize)
                                 .foregroundStyle(keysExpanded ? Color.accentColor : .primary)
-                        }.accessibilityLabel("Mac 快捷键")
+                        }.accessibilityLabel("Mac Shortcuts")
                     }
                     Button { drag.toggle() } label: {
                         Image(systemName: drag ? "hand.point.up.left.fill" : "hand.point.up.left")
                             .frame(width: buttonSize, height: buttonSize)
                     }.accessibilityLabel("Drag")
                     Menu {
-                        Button("放大桌面") { zoomRequest = .init(factor: 1.5) }
-                        Button("缩小桌面") { zoomRequest = .init(factor: 1 / 1.5) }.disabled(!client.previewZoomed)
-                        Button("恢复全景", action: fitPreview).disabled(!client.previewZoomed)
-                        Picker("工具栏大小", selection: $preferredButtonSize) {
-                            Text("标准").tag(44.0)
-                            Text("大").tag(50.0)
-                            Text("特大").tag(56.0)
+                        Button("Zoom In") { zoomRequest = .init(factor: 1.5) }
+                        Button("Zoom Out") { zoomRequest = .init(factor: 1 / 1.5) }.disabled(!client.previewZoomed)
+                        Button("Fit Desktop", action: fitPreview).disabled(!client.previewZoomed)
+                        Picker("Toolbar Size", selection: $preferredButtonSize) {
+                            Text("Standard").tag(44.0)
+                            Text("Large").tag(50.0)
+                            Text("Extra Large").tag(56.0)
                         }
-                        Text("单指滑动滚动内容，双指捏合缩放。放大后双指平移。")
+                        Text("Swipe with one finger to scroll. Pinch to zoom, then use two fingers to pan.")
                     } label: {
                         Image(systemName: "magnifyingglass").frame(width: buttonSize, height: buttonSize)
-                    }.accessibilityLabel("桌面缩放")
+                    }.accessibilityLabel("Desktop Zoom")
                 }
             }
             .padding(4).background(.regularMaterial, in: Capsule())

@@ -45,6 +45,8 @@ final class HighPerformanceDesktop {
     private(set) var connecting = false
     private(set) var ready = false
     private(set) var error: String?
+    private(set) var offersMirror = false
+    private(set) var credentialsRejected = false
     private var attempt: Task<Void, Never>?
     private var watchdog: Task<Void, Never>?
     private var viewport = CGSize.zero
@@ -65,6 +67,8 @@ final class HighPerformanceDesktop {
 
     func start(_ computer: DesktopComputer, credentials: DesktopCredentials, connected: @escaping () -> Void) {
         stop()
+        offersMirror = false
+        credentialsRejected = false
         error = nil
         connecting = true
         let current = VNCSession(configuration: Self.configuration)
@@ -109,7 +113,17 @@ final class HighPerformanceDesktop {
                 }
             } catch {
                 guard !Task.isCancelled else { return }
-                fail(error.localizedDescription)
+                if case VNCError.authenticationFailed(let reason) = error {
+                    if reason == "The server does not offer the requested security method" {
+                        offersMirror = true
+                        fail(String(localized: "This Mac does not offer the authentication method required for a private desktop."))
+                    } else {
+                        credentialsRejected = true
+                        fail(String(localized: "Check your Mac username, password and Screen Sharing access."))
+                    }
+                } else {
+                    fail(error.localizedDescription)
+                }
             }
         }
     }

@@ -1,15 +1,15 @@
-# AirPointer Remote
+# GlideCue Remote
 
 用 iPhone 或 Apple Watch 通过蓝牙控制 Mac 的系统鼠标。iPhone 支持触控板、空中鼠标和混合模式，Apple Watch 可以独立连接 Mac。
 
-打开 `AirPointerRemote.xcodeproj`，在 Xcode 中选择下面的 Scheme：
+打开 `GlideCueRemote.xcodeproj`，在 Xcode 中选择下面的 Scheme：
 
 | Scheme | 最低系统 | Bundle ID |
 | --- | --- | --- |
-| AirPointer Remote iPhone | iOS 17 | `com.daokaihua.airpointerremote` |
-| AirPointer Remote Watch | watchOS 11 | `com.daokaihua.airpointerremote.watchkitapp` |
-| AirPointer Remote Mac | macOS 14 | `com.daokaihua.airpointerremote` |
-| AirPointer Remote Mac Direct | macOS 14 | `com.daokaihua.airpointerremote.direct` |
+| GlideCue Remote iPhone | iOS 18 | `cn.zhaodk.glidecue` |
+| GlideCue Remote Watch | watchOS 11 | `cn.zhaodk.glidecue.watchkitapp` |
+| GlideCue Remote Mac | macOS 14 | `cn.zhaodk.glidecue` |
+| GlideCue Remote Mac Direct | macOS 14 | `cn.zhaodk.glidecue.direct` |
 
 先运行 Mac 接收端，允许蓝牙访问，并在「系统设置 → 隐私与安全性 → 辅助功能」中为新 App 授权。然后在 iPhone 或手表上选择 Mac 并完成配对。新 Bundle ID 对应新的 App 安装和权限记录，首次使用需要重新配对。Mac 菜单栏可以暂停、撤销手机配对或退出。紧急停止快捷键为 Control + Option + Command + 句号。
 
@@ -34,14 +34,13 @@ Mac 的 Debug 配置沿用开发版的鼠标控制方式。Release 配置启用�
 
 ## App Store 分发
 
-1. 核对三个 Target 的 Apple Developer Team，并在开发者账号中注册主 Bundle ID 与 Watch Bundle ID。提交前可在项目级设置里统一修改 `AIRPOINTER_BUNDLE_ID`。
-2. 在 App Store Connect 创建 iOS 产品记录，选择主 Bundle ID，再为该记录添加 macOS 平台。
-3. 用 iPhone Scheme 选择通用 iOS 设备并归档。Watch App 随 iPhone 构建上传。单独用 Mac Scheme 归档 macOS 构建。
-4. 在 Xcode Organizer 验证并上传两个签名归档。用 TestFlight 检查分发版体验，填写 Apple Watch 截图、隐私和支持信息、加密申报及配对说明后送审。
+1. 在 Apple Developer 注册 `cn.zhaodk.glidecue`，并在 App Store Connect 创建以英语（美国）为主语言的 iOS 记录。
+2. 用 GlideCue Remote iPhone Scheme 选择通用 iOS 设备并归档。此 Scheme 的安装包仅包含 iPhone App。
+3. 用 Xcode Organizer 验证并上传签名归档。在 TestFlight 验证后填写商店截图、隐私和支持信息、加密申报及配对说明。
 
 ## 合盖桌面
 
-从「应用程序」打开 **AirPointer Remote Direct**。首次打开会显示 **Closed-Lid Desktop** 设置，之后可从 Mac 菜单栏重新打开。保持机盖打开，打开功能开关，允许屏幕录制与鼠标控制，在 **Closed-Lid Power** 项点击 **Set Up** 并按系统提示允许后台服务。直装版使用独立 Bundle ID，首次配对需要重新确认。
+从「应用程序」打开 **GlideCue Remote Direct**。首次打开会显示 **Closed-Lid Desktop** 设置，之后可从 Mac 菜单栏重新打开。保持机盖打开，打开功能开关，允许屏幕录制与鼠标控制，在 **Closed-Lid Power** 项点击 **Set Up** 并按系统提示允许后台服务。直装版使用独立 Bundle ID，首次配对需要重新确认。
 
 在已配对的 iPhone 上点首页 **Share** 或 **Linked Screen → Start Sharing**。看到 Lid Desktop 和「可以合上 Mac 屏幕了」后再合盖。开盖会恢复内屏亮度，手机继续显示原来的虚拟桌面。想显示内屏时，可在手机的 Linked Screen 选择 **Choose a Display on the Mac**。退出共享后，Mac 恢复原睡眠设置。
 
@@ -63,9 +62,9 @@ Mac 的 Debug 配置沿用开发版的鼠标控制方式。Release 配置启用�
 AIRPOINTER_NOTARY_PROFILE=AirPointerNotary ./scripts/build-mac-dmg.sh --direct
 ```
 
-`AirPointerNotary` 是示例名称。首次可运行 `xcrun notarytool store-credentials AirPointerNotary`，按交互提示配置团队认证。脚本会验证 DMG 的公证票据和包内 App 的签名，并输出带版本号和构建号的安装包路径。用户打开 DMG，将 AirPointer Remote 拖入 Applications，再从 Applications 打开，菜单栏会显示接收端图标。
+`AirPointerNotary` 是示例名称。首次可运行 `xcrun notarytool store-credentials AirPointerNotary`，按交互提示配置团队认证。脚本会验证 DMG 的公证票据和包内 App 的签名，并输出带版本号和构建号的安装包路径。用户打开 DMG，将 GlideCue Remote 拖入 Applications，再从 Applications 打开，菜单栏会显示接收端图标。
 
-运行 `./scripts/build-mac-dmg.sh --standard` 可构建普通 Mac 版并更新 `iPhone/Resources/AirPointer Remote for Mac.dmg`。随后重新构建 iPhone App，用户可在 **Choose Your Mac → Set Up Your Mac → Share Mac Installer** 找到普通版安装包。使用 `--direct` 生成官网直装版独立的 `-Direct` DMG。
+运行 `./scripts/build-mac-dmg.sh --standard` 可构建普通 Mac 版并更新 `iPhone/Resources/GlideCue Remote for Mac.dmg`。随后重新构建 iPhone App，用户可在 **Choose Your Mac → Set Up Your Mac → Share Mac Installer** 找到普通版安装包。使用 `--direct` 生成官网直装版独立的 `-Direct` DMG。
 
 ## 开发检查
 
@@ -75,6 +74,6 @@ AIRPOINTER_NOTARY_PROFILE=AirPointerNotary ./scripts/build-mac-dmg.sh --direct
 
 ## 致谢
 
-特别感谢 Umar Afzal 开源 [WatchPointer](https://github.com/umarz317/WatchPointer)。AirPointer Remote 基于 WatchPointer 开发，并在其基础上加入了 iPhone 遥控支持。
+特别感谢 Umar Afzal 开源 [WatchPointer](https://github.com/umarz317/WatchPointer)。GlideCue Remote 基于 WatchPointer 开发，并在其基础上加入了 iPhone 遥控支持。
 
 本项目保留原作者的版权声明与 [MIT 许可证](LICENSE)，并随三端 App 一起打包。

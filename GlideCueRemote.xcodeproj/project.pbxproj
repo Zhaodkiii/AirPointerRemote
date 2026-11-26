@@ -12,26 +12,18 @@
 		B20000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019 /* LICENSE */; };
 		B20000000000000000000032 /* Shared/LinkedTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000031 /* Shared/LinkedTransport.swift */; };
 		C30000000000000000000012 /* Shared/PhoneProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000011 /* Shared/PhoneProtocol.swift */; };
-		C30000000000000000000014 /* AirPointerRemoteWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* AirPointerRemoteWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C30000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019 /* LICENSE */; };
 		C30000000000000000000032 /* Shared/LinkedTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000031 /* Shared/LinkedTransport.swift */; };
 		D40000000000000000000012 /* Shared/PhoneProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000011 /* Shared/PhoneProtocol.swift */; };
 		D40000000000000000000018 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000019 /* LICENSE */; };
 		D40000000000000000000022 /* AirPointerLidPower in Embed Power Helper */ = {isa = PBXBuildFile; fileRef = E50000000000000000000001 /* AirPointerLidPower */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		D40000000000000000000023 /* Config/com.daokaihua.airpointerremote.direct.power.plist in Embed LaunchDaemon Plist */ = {isa = PBXBuildFile; fileRef = D40000000000000000000025 /* Config/com.daokaihua.airpointerremote.direct.power.plist */; };
+		D40000000000000000000023 /* Config/cn.zhaodk.glidecue.direct.power.plist in Embed LaunchDaemon Plist */ = {isa = PBXBuildFile; fileRef = D40000000000000000000025 /* Config/cn.zhaodk.glidecue.direct.power.plist */; };
 		D40000000000000000000032 /* Shared/LinkedTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000031 /* Shared/LinkedTransport.swift */; };
 		E50000000000000000000012 /* MacDirect/LidPowerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D40000000000000000000026 /* MacDirect/LidPowerProtocol.swift */; };
 		F60000000000000000000001 /* rootshellVNC in Frameworks */ = {isa = PBXBuildFile; productRef = F60000000000000000000002 /* rootshellVNC */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		C30000000000000000000017 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C30000000000000000000009 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = A10000000000000000000006;
-			remoteInfo = "AirPointer Remote Watch";
-		};
 		E50000000000000000000017 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = C30000000000000000000009 /* Project object */;
@@ -42,17 +34,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		C30000000000000000000015 /* Embed Watch Content */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
-			dstSubfolderSpec = 16;
-			files = (
-				C30000000000000000000014 /* AirPointerRemoteWatch.app in Embed Watch Content */,
-			);
-			name = "Embed Watch Content";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		D40000000000000000000020 /* Embed Power Helper */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -70,7 +51,7 @@
 			dstPath = Contents/Library/LaunchDaemons;
 			dstSubfolderSpec = 1;
 			files = (
-				D40000000000000000000023 /* Config/com.daokaihua.airpointerremote.direct.power.plist in Embed LaunchDaemon Plist */,
+				D40000000000000000000023 /* Config/cn.zhaodk.glidecue.direct.power.plist in Embed LaunchDaemon Plist */,
 			);
 			name = "Embed LaunchDaemon Plist";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -78,17 +59,69 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A10000000000000000000001 /* AirPointerRemoteWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemoteWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B20000000000000000000001 /* AirPointerRemoteMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemoteMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		C30000000000000000000001 /* AirPointerRemote.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemote.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000001 /* GlideCueRemoteWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GlideCueRemoteWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000001 /* GlideCueRemoteMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GlideCueRemoteMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C30000000000000000000001 /* GlideCueRemote.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GlideCueRemote.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C30000000000000000000011 /* Shared/PhoneProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/PhoneProtocol.swift; sourceTree = SOURCE_ROOT; };
 		C30000000000000000000019 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = SOURCE_ROOT; };
 		C30000000000000000000031 /* Shared/LinkedTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/LinkedTransport.swift; sourceTree = SOURCE_ROOT; };
-		D40000000000000000000001 /* AirPointerRemoteMacDirect.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirPointerRemoteMacDirect.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		D40000000000000000000025 /* Config/com.daokaihua.airpointerremote.direct.power.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Config/com.daokaihua.airpointerremote.direct.power.plist; sourceTree = SOURCE_ROOT; };
+		D40000000000000000000001 /* GlideCueRemoteMacDirect.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GlideCueRemoteMacDirect.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D40000000000000000000025 /* Config/cn.zhaodk.glidecue.direct.power.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Config/cn.zhaodk.glidecue.direct.power.plist; sourceTree = SOURCE_ROOT; };
 		D40000000000000000000026 /* MacDirect/LidPowerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacDirect/LidPowerProtocol.swift; sourceTree = SOURCE_ROOT; };
 		E50000000000000000000001 /* AirPointerLidPower */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = AirPointerLidPower; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C300000000000000000000EF /* Internal review materials */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"AirPointer Remote iPhone 体验评审与改版方案.docx",
+				"AirPointer Remote iPhone 体验评审与改版方案.md",
+				"AirPointer Remote iPhone 参考作品拆解与全页面按钮设计.md",
+				"AirPointer Remote iPhone 控件精简定稿.md",
+				"iPhone 运行录屏关键帧.zip",
+				"review-images/connection-home.png",
+				"review-images/implemented-iphone.jpg",
+				"review-images/login-methods.png",
+				"review-images/mirror-workspace.png",
+				"review-images/recording-mirror-desktop.png",
+				"review-images/recording-private-desktop.png",
+				"review-images/redesign/current-flow.jpg",
+				"review-images/redesign/home.png",
+				"review-images/redesign/keys.png",
+				"review-images/redesign/login.png",
+				"review-images/redesign/mirror.png",
+				"review-images/redesign/page-01.png",
+				"review-images/redesign/page-02.png",
+				"review-images/redesign/page-03.png",
+				"review-images/redesign/page-04.png",
+				"review-images/redesign/page-05.png",
+				"review-images/redesign/page-06.png",
+				"review-images/redesign/page-07.png",
+				"review-images/redesign/page-08.png",
+				"review-images/redesign/page-09.png",
+				"review-images/redesign/page-10.png",
+				"review-images/redesign/page-11.png",
+				"review-images/redesign/page-12.png",
+				"review-images/redesign/page-13.png",
+				"review-images/redesign/page-14.png",
+				"review-images/redesign/page-15.png",
+				"review-images/redesign/page-16.png",
+				"review-images/redesign/page-17.png",
+				"review-images/redesign/page-18.png",
+				"review-images/redesign/page-19.png",
+				"review-images/redesign/recovery.png",
+				"review-images/redesign/reference-display.jpg",
+				"review-images/redesign/reference-entry.jpg",
+				"review-images/redesign/reference-tools.jpg",
+				"review-images/redesign/waiting.png",
+				"review-images/redesign/wire-connect.jpg",
+				"review-images/redesign/wire-session.jpg",
+				"review-images/settings-help-setup.png",
+			);
+			target = C30000000000000000000006 /* GlideCue Remote iPhone */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000002 /* Watch */ = {
@@ -103,6 +136,7 @@
 		};
 		C30000000000000000000002 /* iPhone */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (C300000000000000000000EF /* Internal review materials */,);
 			path = iPhone;
 			sourceTree = "<group>";
 		};
@@ -166,7 +200,7 @@
 				B20000000000000000000002 /* Mac */,
 				D40000000000000000000002 /* MacDirect */,
 				E50000000000000000000002 /* LidPowerHelper */,
-				D40000000000000000000025 /* Config/com.daokaihua.airpointerremote.direct.power.plist */,
+				D40000000000000000000025 /* Config/cn.zhaodk.glidecue.direct.power.plist */,
 				A10000000000000000000002 /* Watch */,
 				C30000000000000000000011 /* Shared/PhoneProtocol.swift */,
 				C30000000000000000000031 /* Shared/LinkedTransport.swift */,
@@ -179,11 +213,11 @@
 		C30000000000000000000005 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C30000000000000000000001 /* AirPointerRemote.app */,
-				B20000000000000000000001 /* AirPointerRemoteMac.app */,
-				D40000000000000000000001 /* AirPointerRemoteMacDirect.app */,
+				C30000000000000000000001 /* GlideCueRemote.app */,
+				B20000000000000000000001 /* GlideCueRemoteMac.app */,
+				D40000000000000000000001 /* GlideCueRemoteMacDirect.app */,
 				E50000000000000000000001 /* AirPointerLidPower */,
-				A10000000000000000000001 /* AirPointerRemoteWatch.app */,
+				A10000000000000000000001 /* GlideCueRemoteWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -191,9 +225,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A10000000000000000000006 /* AirPointer Remote Watch */ = {
+		A10000000000000000000006 /* GlideCue Remote Watch */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Watch" */;
+			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXNativeTarget "GlideCue Remote Watch" */;
 			buildPhases = (
 				A10000000000000000000007 /* Sources */,
 				A10000000000000000000003 /* Frameworks */,
@@ -206,14 +240,14 @@
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000002 /* Watch */,
 			);
-			name = "AirPointer Remote Watch";
-			productName = AirPointerRemoteWatch;
-			productReference = A10000000000000000000001 /* AirPointerRemoteWatch.app */;
+			name = "GlideCue Remote Watch";
+			productName = GlideCueRemoteWatch;
+			productReference = A10000000000000000000001 /* GlideCueRemoteWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
-		B20000000000000000000006 /* AirPointer Remote Mac */ = {
+		B20000000000000000000006 /* GlideCue Remote Mac */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B2000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Mac" */;
+			buildConfigurationList = B2000000000000000000000B /* Build configuration list for PBXNativeTarget "GlideCue Remote Mac" */;
 			buildPhases = (
 				B20000000000000000000007 /* Sources */,
 				B20000000000000000000003 /* Frameworks */,
@@ -226,39 +260,37 @@
 			fileSystemSynchronizedGroups = (
 				B20000000000000000000002 /* Mac */,
 			);
-			name = "AirPointer Remote Mac";
-			productName = AirPointerRemoteMac;
-			productReference = B20000000000000000000001 /* AirPointerRemoteMac.app */;
+			name = "GlideCue Remote Mac";
+			productName = GlideCueRemoteMac;
+			productReference = B20000000000000000000001 /* GlideCueRemoteMac.app */;
 			productType = "com.apple.product-type.application";
 		};
-		C30000000000000000000006 /* AirPointer Remote iPhone */ = {
+		C30000000000000000000006 /* GlideCue Remote iPhone */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = C3000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote iPhone" */;
+			buildConfigurationList = C3000000000000000000000B /* Build configuration list for PBXNativeTarget "GlideCue Remote iPhone" */;
 			buildPhases = (
 				C30000000000000000000007 /* Sources */,
 				C30000000000000000000003 /* Frameworks */,
 				C30000000000000000000008 /* Resources */,
-				C30000000000000000000015 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				C30000000000000000000016 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				C30000000000000000000002 /* iPhone */,
 			);
-			name = "AirPointer Remote iPhone";
+			name = "GlideCue Remote iPhone";
 			packageProductDependencies = (
 				F60000000000000000000002 /* rootshellVNC */,
 			);
-			productName = AirPointerRemote;
-			productReference = C30000000000000000000001 /* AirPointerRemote.app */;
+			productName = GlideCueRemote;
+			productReference = C30000000000000000000001 /* GlideCueRemote.app */;
 			productType = "com.apple.product-type.application";
 		};
-		D40000000000000000000006 /* AirPointer Remote Mac Direct */ = {
+		D40000000000000000000006 /* GlideCue Remote Mac Direct */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D4000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Mac Direct" */;
+			buildConfigurationList = D4000000000000000000000B /* Build configuration list for PBXNativeTarget "GlideCue Remote Mac Direct" */;
 			buildPhases = (
 				D40000000000000000000007 /* Sources */,
 				D40000000000000000000003 /* Frameworks */,
@@ -275,9 +307,9 @@
 				B20000000000000000000002 /* Mac */,
 				D40000000000000000000002 /* MacDirect */,
 			);
-			name = "AirPointer Remote Mac Direct";
-			productName = AirPointerRemoteMacDirect;
-			productReference = D40000000000000000000001 /* AirPointerRemoteMacDirect.app */;
+			name = "GlideCue Remote Mac Direct";
+			productName = GlideCueRemoteMacDirect;
+			productReference = D40000000000000000000001 /* GlideCueRemoteMacDirect.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E50000000000000000000006 /* AirPointerLidPower */ = {
@@ -308,7 +340,7 @@
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 			};
-			buildConfigurationList = C3000000000000000000000A /* Build configuration list for PBXProject "AirPointerRemote" */;
+			buildConfigurationList = C3000000000000000000000A /* Build configuration list for PBXProject "GlideCueRemote" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -320,18 +352,18 @@
 			mainGroup = C30000000000000000000004;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				F60000000000000000000003 /* XCLocalSwiftPackageReference "rootshell-vnc" */,
+				F60000000000000000000003 /* XCLocalSwiftPackageReference "Vendor/rootshell-vnc" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C30000000000000000000005 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				C30000000000000000000006 /* AirPointer Remote iPhone */,
-				B20000000000000000000006 /* AirPointer Remote Mac */,
-				D40000000000000000000006 /* AirPointer Remote Mac Direct */,
+				C30000000000000000000006 /* GlideCue Remote iPhone */,
+				B20000000000000000000006 /* GlideCue Remote Mac */,
+				D40000000000000000000006 /* GlideCue Remote Mac Direct */,
 				E50000000000000000000006 /* AirPointerLidPower */,
-				A10000000000000000000006 /* AirPointer Remote Watch */,
+				A10000000000000000000006 /* GlideCue Remote Watch */,
 			);
 		};
 /* End PBXProject section */
@@ -417,11 +449,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		C30000000000000000000016 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = A10000000000000000000006 /* AirPointer Remote Watch */;
-			targetProxy = C30000000000000000000017 /* PBXContainerItemProxy */;
-		};
 		D40000000000000000000024 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = E50000000000000000000006 /* AirPointerLidPower */;
@@ -438,7 +465,7 @@
 				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = 4AN6PV98G7;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_CFBundleDisplayName = "GlideCue Remote";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Sends pointer movement to your Mac.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Uses wrist motion to point at your Mac.";
 				INFOPLIST_KEY_WKApplication = YES;
@@ -446,7 +473,7 @@
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).watchkitapp";
-				PRODUCT_NAME = AirPointerRemoteWatch;
+				PRODUCT_NAME = GlideCueRemoteWatch;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "watchos watchsimulator";
@@ -463,7 +490,7 @@
 				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = 4AN6PV98G7;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_CFBundleDisplayName = "GlideCue Remote";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Sends pointer movement to your Mac.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Uses wrist motion to point at your Mac.";
 				INFOPLIST_KEY_WKApplication = YES;
@@ -471,7 +498,7 @@
 				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).watchkitapp";
-				PRODUCT_NAME = AirPointerRemoteWatch;
+				PRODUCT_NAME = GlideCueRemoteWatch;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "watchos watchsimulator";
@@ -492,7 +519,7 @@
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/MacInfo.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_CFBundleDisplayName = "GlideCue Remote";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
@@ -500,7 +527,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
-				PRODUCT_NAME = AirPointerRemoteMac;
+				PRODUCT_NAME = GlideCueRemoteMac;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -519,7 +546,7 @@
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/MacInfo.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_CFBundleDisplayName = "GlideCue Remote";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
@@ -527,7 +554,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
-				PRODUCT_NAME = AirPointerRemoteMac;
+				PRODUCT_NAME = GlideCueRemoteMac;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -535,7 +562,7 @@
 		C3000000000000000000000C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				AIRPOINTER_BUNDLE_ID = com.daokaihua.airpointerremote;
+				AIRPOINTER_BUNDLE_ID = cn.zhaodk.glidecue;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ONLY_ACTIVE_ARCH = YES;
@@ -547,7 +574,7 @@
 		C3000000000000000000000D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				AIRPOINTER_BUNDLE_ID = com.daokaihua.airpointerremote;
+				AIRPOINTER_BUNDLE_ID = cn.zhaodk.glidecue;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -560,11 +587,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = 4AN6PV98G7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/iPhoneInfo.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_CFBundleDisplayName = "GlideCue Remote";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connects to your Mac to control its mouse.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Uses phone rotation to control the Mac pointer.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -573,7 +600,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
-				PRODUCT_NAME = AirPointerRemote;
+				PRODUCT_NAME = GlideCueRemote;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				TARGETED_DEVICE_FAMILY = 1;
@@ -585,11 +612,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = 4AN6PV98G7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/iPhoneInfo.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote";
+				INFOPLIST_KEY_CFBundleDisplayName = "GlideCue Remote";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connects to your Mac to control its mouse.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Uses phone rotation to control the Mac pointer.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -598,7 +625,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID)";
-				PRODUCT_NAME = AirPointerRemote;
+				PRODUCT_NAME = GlideCueRemote;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				TARGETED_DEVICE_FAMILY = 1;
@@ -618,7 +645,7 @@
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/MacInfo.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote Direct";
+				INFOPLIST_KEY_CFBundleDisplayName = "GlideCue Remote Direct";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
@@ -626,7 +653,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).direct";
-				PRODUCT_NAME = AirPointerRemoteMacDirect;
+				PRODUCT_NAME = GlideCueRemoteMacDirect;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CLOSED_LID_DESKTOP";
 				SWIFT_OBJC_BRIDGING_HEADER = MacDirect/VirtualScreen.h;
@@ -646,7 +673,7 @@
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/MacInfo.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AirPointer Remote Direct";
+				INFOPLIST_KEY_CFBundleDisplayName = "GlideCue Remote Direct";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Receives mouse input from your iPhone or Apple Watch.";
@@ -654,7 +681,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(AIRPOINTER_BUNDLE_ID).direct";
-				PRODUCT_NAME = AirPointerRemoteMacDirect;
+				PRODUCT_NAME = GlideCueRemoteMacDirect;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CLOSED_LID_DESKTOP";
 				SWIFT_OBJC_BRIDGING_HEADER = MacDirect/VirtualScreen.h;
@@ -698,7 +725,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A1000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Watch" */ = {
+		A1000000000000000000000B /* Build configuration list for PBXNativeTarget "GlideCue Remote Watch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000000000000000000000E /* Debug */,
@@ -707,7 +734,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B2000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Mac" */ = {
+		B2000000000000000000000B /* Build configuration list for PBXNativeTarget "GlideCue Remote Mac" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B2000000000000000000000E /* Debug */,
@@ -716,7 +743,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		C3000000000000000000000A /* Build configuration list for PBXProject "AirPointerRemote" */ = {
+		C3000000000000000000000A /* Build configuration list for PBXProject "GlideCueRemote" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C3000000000000000000000C /* Debug */,
@@ -725,7 +752,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		C3000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote iPhone" */ = {
+		C3000000000000000000000B /* Build configuration list for PBXNativeTarget "GlideCue Remote iPhone" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C3000000000000000000000E /* Debug */,
@@ -734,7 +761,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D4000000000000000000000B /* Build configuration list for PBXNativeTarget "AirPointer Remote Mac Direct" */ = {
+		D4000000000000000000000B /* Build configuration list for PBXNativeTarget "GlideCue Remote Mac Direct" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D4000000000000000000000E /* Debug */,
@@ -755,7 +782,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		F60000000000000000000003 /* XCLocalSwiftPackageReference "rootshell-vnc" */ = {
+		F60000000000000000000003 /* XCLocalSwiftPackageReference "Vendor/rootshell-vnc" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "Vendor/rootshell-vnc";
 		};
@@ -764,7 +791,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		F60000000000000000000002 /* rootshellVNC */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = F60000000000000000000003 /* XCLocalSwiftPackageReference "rootshell-vnc" */;
+			package = F60000000000000000000003 /* XCLocalSwiftPackageReference "Vendor/rootshell-vnc" */;
 			productName = rootshellVNC;
 		};
 /* End XCSwiftPackageProductDependency section */

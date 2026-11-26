@@ -5,13 +5,13 @@ setvbuf(stdout, nil, _IONBF, 0) // show log lines immediately
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory) // no Dock icon, just the notch
 #if CLOSED_LID_DESKTOP
-let standardBundleID = "com.daokaihua.airpointerremote"
+let standardBundleID = "cn.zhaodk.glidecue"
 if NSRunningApplication.runningApplications(withBundleIdentifier: standardBundleID)
     .contains(where: { $0.executableURL?.lastPathComponent == "AirPointerRemoteMac" && !$0.isTerminated }) {
     let alert = NSAlert()
     alert.messageText = String(localized: "Another AirPointer receiver is open")
-    alert.informativeText = String(localized: "Quit AirPointer Remote from its menu bar, then reopen AirPointer Remote Direct so your iPhone connects to the correct receiver.")
-    alert.addButton(withTitle: String(localized: "Quit AirPointer Remote Direct"))
+    alert.informativeText = String(localized: "Quit GlideCue Remote from its menu bar, then reopen GlideCue Remote Direct so your iPhone connects to the correct receiver.")
+    alert.addButton(withTitle: String(localized: "Quit GlideCue Remote Direct"))
     NSApp.activate(ignoringOtherApps: true)
     alert.runModal()
     exit(0)
